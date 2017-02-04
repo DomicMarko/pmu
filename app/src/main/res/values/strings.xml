@@ -1,0 +1,29 @@
+<resources>
+    <string name="app_name">Poligon</string>
+
+    <string name="option_1">Novi poligon</string>
+    <string name="option_2">Statistika</string>
+    <string name="option_3">Podešavanja</string>
+
+    <string name="draw_menu_nista_option">Stop crtanju</string>
+    <string name="draw_menu_start_option">Pošetni položaj kuglice</string>
+    <string name="draw_menu_true_rupa_option">Ciljna rupa</string>
+    <string name="draw_menu_false_rupa_option">Pogrešna rupa</string>
+    <string name="draw_menu_zid_option">Zid</string>
+    <string name="draw_menu_save_draw_option">Sačuvajte</string>
+    <string name="draw_menu_cancel_draw_option">Izadjite</string>
+    <string name="draw_menu_undo_option">Korak nazad</string>
+    <string name="draw_menu_erase_option">Obrišite sve</string>
+    <string name="delete_poligon_option">Obrišite poligon</string>
+
+    <string name="congrats_message">Čestitamo!</string>
+    <string name="score_name">Vaše ime</string>
+    <string name="save_result_btn">Sačuvajte rezultat</string>
+    <string name="cancel_btn">Otkažite</string>
+
+    <string name="poligon_scores_username_label">Ime igrača:</string>
+    <string name="poligon_scores_user_score_label">Broj sekundi:</string>
+
+    <string name="clear_all_statistics">Obrišite sve statistike</string>
+    <string name="clear_statistics_for_poligon">Obrišite statistike za odabrani poligon</string>
+</resources>
