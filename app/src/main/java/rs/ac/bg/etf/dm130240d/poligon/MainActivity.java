@@ -18,6 +18,7 @@ import android.widget.Toast;
 import rs.ac.bg.etf.dm130240d.poligon.crtanje_poligona.DrawPoligonActivity;
 import rs.ac.bg.etf.dm130240d.poligon.game.GameActivity;
 import rs.ac.bg.etf.dm130240d.poligon.interfaces.ViewInterface;
+import rs.ac.bg.etf.dm130240d.poligon.settings.SettingsActivity;
 import rs.ac.bg.etf.dm130240d.poligon.statistics.ListStatisticsActivity;
 
 public class MainActivity extends AppCompatActivity implements ViewInterface {
@@ -115,6 +116,8 @@ public class MainActivity extends AppCompatActivity implements ViewInterface {
                 startActivity(intentStatistics);
                 return true;
             case R.id.option_3:
+                Intent intentSettings = new Intent(this,SettingsActivity.class);
+                startActivity(intentSettings);
                 return true;
             default:
                 return super.onOptionsItemSelected(item);

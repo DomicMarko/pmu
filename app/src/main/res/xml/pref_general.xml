@@ -1,0 +1,42 @@
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- NOTE: EditTextPreference accepts EditText attributes. -->
+    <!-- NOTE: EditTextPreference's summary should be set to its value by the activity code. -->
+
+    <PreferenceCategory
+        android:title="@string/settings_category">
+
+
+        <rs.ac.bg.etf.dm130240d.poligon.settings.NumberPickerPreference
+            android:defaultValue="5"
+            android:key="otpor"
+            android:title="@string/pref_title_otpor_label" />
+
+        <EditTextPreference
+            android:capitalize="words"
+            android:defaultValue="4"
+            android:inputType="number"
+            android:key="faktor_odbijanja"
+            android:maxLines="1"
+            android:selectAllOnFocus="true"
+            android:singleLine="true"
+            android:title="@string/pref_title_faktor_odbijanja_label" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:title="@string/reset_category">
+
+        <rs.ac.bg.etf.dm130240d.poligon.settings.ResetDefDiagPref
+            android:dialogMessage="@string/are_you_sure"
+            android:key="resetDialog"
+            android:negativeButtonText="Ne"
+            android:persistent="false"
+            android:positiveButtonText="Da"
+            android:summary="@string/reset_settings_option_detail"
+            android:title="@string/reset_settings_option" >
+        </rs.ac.bg.etf.dm130240d.poligon.settings.ResetDefDiagPref>
+
+    </PreferenceCategory>
+
+</PreferenceScreen>

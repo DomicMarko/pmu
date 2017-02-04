@@ -24,7 +24,15 @@
         <activity
             android:name=".game.GameActivity"
             android:screenOrientation="landscape" />
-        <activity android:name=".statistics.ListStatisticsActivity"></activity>
+        <activity android:name=".statistics.ListStatisticsActivity" />
+        <activity
+            android:name=".settings.SettingsActivity"
+            android:label="@string/title_activity_settings"
+            android:parentActivityName=".MainActivity">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value="rs.ac.bg.etf.dm130240d.poligon.MainActivity" />
+        </activity>
     </application>
 
 </manifest>

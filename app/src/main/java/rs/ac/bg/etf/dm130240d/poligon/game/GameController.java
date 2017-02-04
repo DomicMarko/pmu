@@ -1,7 +1,9 @@
 package rs.ac.bg.etf.dm130240d.poligon.game;
 
 import android.app.Activity;
+import android.content.SharedPreferences;
 import android.os.AsyncTask;
+import android.preference.PreferenceManager;
 import android.support.v7.app.AppCompatActivity;
 import android.widget.Toast;
 
@@ -24,13 +26,16 @@ import rs.ac.bg.etf.dm130240d.poligon.interfaces.ViewInterface;
 public class GameController implements Serializable {
 
     private String mapPath, mapName;
-    private ParameterCord currentBall, trueHole, startHole, imageViewCord, startSensorCord;
+    private ParameterCord currentBall, trueHole, startHole, imageViewCord, startSensorCord, lastRemainder;
     private ArrayList<ParameterCord> falseHoles, startWall, endWall;
     private transient ViewInterface displayView;
     private boolean gameOver = false;
     private boolean hasWon = false;
     private transient DbModel dbModel;
     private boolean sqlInsertResult;
+    private int otpor;
+    private float hitWallLeft, hitWallRight, hitWallTop, hitWallBottom;
+    private float currentHitWallLeft, currentHitWallRight, currentHitWallTop, currentHitWallBottom;
 
     protected static final int SLEEP_INTERVAL = 50;
 
@@ -39,6 +44,9 @@ public class GameController implements Serializable {
     protected TimerModel model;
 
     public GameController(ViewInterface displayView, String mapPath, TimerModel m, String mapName){
+
+        SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences((AppCompatActivity)displayView);
+        otpor = sp.getInt("otpor", 5);
 
         this.displayView = displayView;
         this.mapPath = mapPath;
@@ -51,6 +59,10 @@ public class GameController implements Serializable {
         currentBall = new ParameterCord(0, 0);
         trueHole = new ParameterCord(0, 0);
         startHole = new ParameterCord(0, 0);
+        lastRemainder = new ParameterCord(0, 0);
+
+        hitWallLeft = hitWallTop = hitWallRight = hitWallBottom = 0;
+        currentHitWallLeft = currentHitWallTop = currentHitWallRight = currentHitWallBottom = 0;
 
         model = m;
 
@@ -170,8 +182,35 @@ public class GameController implements Serializable {
 
     public void moveBall(float x, float y){
 
-        float nextX = (4*x) - startSensorCord.x;
-        float nextY = (4*y) - startSensorCord.y;
+        float nextX = (x - startSensorCord.x) + lastRemainder.x;
+        float nextY = (y - startSensorCord.y) + lastRemainder.y;
+
+        if(hitWallTop != 0 || hitWallBottom != 0){
+            if(hitWallTop != 0){
+                nextX = hitWallTop > 0 ? currentHitWallTop++ : currentHitWallTop--;
+                if(hitWallTop == currentHitWallTop) currentHitWallTop = hitWallTop = 0;
+            }
+
+            if(hitWallBottom != 0){
+                nextX = hitWallBottom > 0 ? currentHitWallBottom++ : currentHitWallBottom--;
+                if(hitWallBottom == currentHitWallBottom) currentHitWallBottom = hitWallBottom = 0;
+            }
+        }
+
+        if(hitWallLeft != 0 || hitWallRight != 0){
+            if(hitWallLeft != 0){
+                nextX = hitWallLeft > 0 ? currentHitWallLeft++ : currentHitWallLeft--;
+                if(hitWallLeft == currentHitWallLeft) currentHitWallLeft = hitWallLeft = 0;
+            }
+
+            if(hitWallRight != 0){
+                nextX = hitWallRight > 0 ? currentHitWallRight++ : currentHitWallRight--;
+                if(hitWallRight == currentHitWallRight) currentHitWallRight = hitWallRight = 0;
+            }
+        }
+
+        lastRemainder.x = nextX;
+        lastRemainder.y = nextY;
 
         float testX = currentBall.x + nextY;
         float testY = currentBall.y + nextX;
@@ -184,6 +223,8 @@ public class GameController implements Serializable {
             Toast.makeText((AppCompatActivity)displayView, "CESTITAMO!", Toast.LENGTH_SHORT).show();
             currentBall.x = 0;
             currentBall.y = 0;
+            lastRemainder.x = 0;
+            lastRemainder.y = 0;
             gameOver = true;
             hasWon = true;
             stop_timer();
@@ -197,6 +238,8 @@ public class GameController implements Serializable {
                 Toast.makeText((AppCompatActivity)displayView, "GAME OVER!", Toast.LENGTH_SHORT).show();
                 currentBall.x = 0;
                 currentBall.y = 0;
+                lastRemainder.x = 0;
+                lastRemainder.y = 0;
                 gameOver = true;
                 hasWon = false;
                 stop_timer();
@@ -205,12 +248,14 @@ public class GameController implements Serializable {
             }
         }
 
-        if((nextX + currentBall.y) <= 75){ currentBall.y = 75; canChangeY = false; }
-        if((nextX + currentBall.y + 75) >= imageViewCord.y){ currentBall.y = imageViewCord.y - 75; canChangeY = false; }
+        if((nextX + currentBall.y) <= 75){ nextX *= -1; lastRemainder.x = 0; hitWallTop = nextX < 0 ? 2 : -2; currentHitWallTop = 0; currentBall.y = 75; canChangeY = false; }
+        if((nextX + currentBall.y + 75) >= imageViewCord.y){ nextX *= -1; lastRemainder.x = 0; hitWallBottom = nextX < 0 ? 2 : -2; currentHitWallBottom = 0;  currentBall.y = imageViewCord.y - 75; canChangeY = false; }
 
 
-        if((nextY + currentBall.x) <= 75){ currentBall.x = 75; canChangeX = false; }
-        if((nextY + currentBall.x + 75) >= imageViewCord.x){ currentBall.x = imageViewCord.x - 75; canChangeX = false; }
+        if((nextY + currentBall.x) <= 75){ nextY *= -1; lastRemainder.y = 0; hitWallLeft = nextY < 0 ? 2 : -2; currentHitWallLeft = 0; currentBall.x = 75; canChangeX = false; }
+        if((nextY + currentBall.x + 75) >= imageViewCord.x){ nextY *= -1; lastRemainder.y = 0; hitWallRight = nextY < 0 ? 2 : -2; currentHitWallRight = 0; currentBall.x = imageViewCord.x - 75; canChangeX = false; }
+
+        if(!canChangeX && !canChangeY){ displayView.updateView(); return; }
 
         for(int i = 0; i < startWall.size(); i++){
 
@@ -221,18 +266,42 @@ public class GameController implements Serializable {
 
             if(canChangeY && ((nextY + currentBall.x) < right) && ((nextY + currentBall.x) > left)){
                 if(((nextX + currentBall.y) >= (top - 75)) && ((nextX + currentBall.y) <= (75 + bottom))){
-                    currentBall.y = currentBall.y <= ((top + ((bottom - top)/2)) - 75) ? top - 75 : bottom + 75;
+
+                    if((currentBall.y <= ((top + ((bottom - top)/2)) - 75))){
+                        nextX *= -1;
+                        lastRemainder.x = nextX < 0 ? 2 : -2;
+                        currentBall.y = top - 75;
+                    }
+                    if(currentBall.y >= ((top + ((bottom - top)/2)) - 75)){
+                        nextX *= -1;
+                        lastRemainder.x = nextX < 0 ? 2 : -2;
+                        currentBall.y = bottom + 75;
+                    }
                     canChangeY = false;
                 }
             }
 
-            if(canChangeX && ((nextX + currentBall.y) < bottom) && ((nextX + currentBall.y) > top)){
+            float helpY = canChangeY ? nextX + currentBall.y : currentBall.y;
+
+            if(canChangeX && (helpY < bottom) && (helpY > top)){
                 if(((nextY + currentBall.x) >= (left - 75)) && ((nextY + currentBall.x) <= (75 + right))){
-                    currentBall.x = currentBall.x <= ((left + ((right - left)/2)) - 75) ? left - 75 : right + 75;
+
+                    if(currentBall.x <= ((left + ((right - left)/2)) - 75)){
+                        nextY *= -1;
+                        lastRemainder.y = nextY < 0 ? 2 : -2;
+                        currentBall.x = left - 75;
+                    }
+                    if(currentBall.x >= ((left + ((right - left)/2)) - 75)){
+                        nextY *= -1;
+                        lastRemainder.y = nextY < 0 ? 2 : -2;
+                        currentBall.x = right + 75;
+                    }
                     canChangeX = false;
                 }
             }
         }
+
+        if(!canChangeX && !canChangeY){ displayView.updateView(); return; }
 
         boolean foundAngle = false;
 
@@ -378,10 +447,17 @@ public class GameController implements Serializable {
                 }
             }
         }
+        if(!canChangeX && !canChangeY){ displayView.updateView(); return; }
 
+        float otporX, otporY;
+        if(nextX == 0) otporX = 0;
+        else otporX = nextX > 0 ? ((float)-0.1) : ((float)0.1);
 
-        if(canChangeY) currentBall.y += nextX;
-        if(canChangeX) currentBall.x += nextY;
+        if(nextY == 0) otporY = 0;
+        else otporY = nextY > 0 ? ((float)-0.1) : ((float)0.1);
+
+        if(canChangeY){ currentBall.y += (nextX);} //+ (otporX*otpor)); }
+        if(canChangeX){ currentBall.x += (nextY);} //+ (otporY*otpor)); }
 
         displayView.updateView();
     }
