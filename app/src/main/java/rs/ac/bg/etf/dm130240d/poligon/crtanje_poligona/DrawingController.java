@@ -10,7 +10,6 @@ import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.Stack;
 
 import rs.ac.bg.etf.dm130240d.poligon.ParameterCord;
@@ -26,6 +25,7 @@ public class DrawingController implements Serializable {
 
     private ParameterCord trueHole, startHole;
     private ParameterCord erasedFalseHole;
+    private ParameterCord tempStartW, tempEndW;
     private Stack<ParameterCord> trueHoles, startHoles;
     private ArrayList<ParameterCord> falseHoles, startWall, endWall;
     private transient ViewInterface displayView;
@@ -42,10 +42,10 @@ public class DrawingController implements Serializable {
         startWall = new ArrayList<ParameterCord>();
         endWall = new ArrayList<ParameterCord>();
 
-        trueHole = new ParameterCord(0, 0);
+        trueHole = new ParameterCord(-100, -100);
         trueHoles = new Stack<ParameterCord>();
 
-        startHole = new ParameterCord(0, 0);
+        startHole = new ParameterCord(-100, -100);
         startHoles = new Stack<ParameterCord>();
 
         currentMode = insertMode.nista;
@@ -84,46 +84,35 @@ public class DrawingController implements Serializable {
         return endWall;
     }
 
-    public void setStartHole(float x, float y, DrawingView imageView, int actionBarHeight){
+    public ParameterCord getTempStartW() {
+        return tempStartW;
+    }
 
-        startHoles.push(new ParameterCord(startHole.x, startHole.y));
+    public ParameterCord getTempEndW() {
+        return tempEndW;
+    }
 
-        startHole.x = x; // viewCoords[0] is the X coordinate
-        startHole.y = y; // viewCoords[1] is the y coordinate
-
-        lastAdded = insertMode.startRupa;
-
+    public void drawingWall(ParameterCord startW, ParameterCord endW){
+        if(startW != null && endW != null){
+            tempStartW = startW;
+            tempEndW = endW;
+        }
         displayView.updateView();
     }
 
-    public void setTrueHole(float x, float y, DrawingView imageView, int actionBarHeight){
+    public boolean checkPosition(ParameterCord hole1, ParameterCord hole2){
 
-        trueHoles.push(new ParameterCord(trueHole.x, trueHole.y));
-
-        trueHole.x = x; // viewCoords[0] is the X coordinate
-        trueHole.y = y; // viewCoords[1] is the y coordinate
-
-        lastAdded = insertMode.dobraRupa;
-
-        displayView.updateView();
-    }
-
-    public void setFalseHole(float x, float y, DrawingView imageView, int actionBarHeight){
-
-        float cordX = x; // viewCoords[0] is the X coordinate
-        float cordY = y; // viewCoords[1] is the y coordinate
-
-        float startCordX = cordX - 90;
-        float endCordX = cordX + 90;
-        float startCordY = cordY - 90;
-        float endCordY = cordY + 90;
+        float startCordX = hole1.x - 90;
+        float endCordX = hole1.x + 90;
+        float startCordY = hole1.y - 90;
+        float endCordY = hole1.y + 90;
 
         boolean canAdd = true;
 
-        float startX = trueHole.x - 90;
-        float endX = trueHole.x + 90;
-        float startY = trueHole.y - 90;
-        float endY = trueHole.y + 90;
+        float startX = hole2.x - 90;
+        float endX = hole2.x + 90;
+        float startY = hole2.y - 90;
+        float endY = hole2.y + 90;
 
         boolean xIn = false;
         boolean yIn = false;
@@ -131,40 +120,166 @@ public class DrawingController implements Serializable {
         if((startCordX >= startX && startCordX <= endX) || (endCordX >= startX && endCordX <= endX)) xIn = true;
         if((startCordY >= startY && startCordY <= endY) || (endCordY >= startY && endCordY <= endY)) yIn = true;
 
-        if(xIn && yIn){
-            canAdd = false;
-            Toast.makeText((AppCompatActivity)displayView, "Preklapanje sa početnom rupom i brisanje.", Toast.LENGTH_SHORT).show();
+        return xIn && yIn;
+    }
+
+    public boolean checkWallPositionHole(ParameterCord hole, ParameterCord startW, ParameterCord endW){
+
+        float startCordX = hole.x - 90;
+        float endCordX = hole.x + 90;
+        float startCordY = hole.y - 90;
+        float endCordY = hole.y + 90;
+
+        float left = startW.x > endW.x ? endW.x : startW.x;
+        float top = startW.y > endW.y ? endW.y : startW.y;
+        float right = startW.x > endW.x ? startW.x : endW.x;
+        float bottom = startW.y > endW.y ? startW.y : endW.y;
+
+        boolean holeIn = false;
+
+        if(hole.y >= top && hole.y <= bottom){
+            if(startCordX < right && startCordX > left) holeIn = true;
+            if(startCordX <= left && endCordX >= right) holeIn = true;
+            if(endCordX < right && endCordX > left) holeIn = true;
+
         }
-        else{
 
+        if(hole.x >= left && hole.x <= right){
+            if(startCordY < bottom && startCordY > top) holeIn = true;
+            if(startCordY <= top && endCordY >= bottom) holeIn = true;
+            if(endCordY < bottom && endCordY > top) holeIn = true;
+        }
+
+        return holeIn;
+    }
+
+    public void setStartHole(float x, float y, DrawingView imageView){
+
+        startHoles.push(new ParameterCord(startHole.x, startHole.y));
+
+        startHole.x = x; // viewCoords[0] is the X coordinate
+        startHole.y = y; // viewCoords[1] is the y coordinate
+
+        if(startHole.x - 90 <= 0) startHole.x = 90;
+        if(startHole.x + 90 >= imageView.getWidth()) startHole.x = imageView.getWidth() - 90;
+
+        if(startHole.y - 90 <= 0) startHole.y = 90;
+        if(startHole.y + 90 >= imageView.getHeight()) startHole.y = imageView.getHeight() - 90;
+
+        if(checkPosition(startHole, trueHole)){
+            //Toast.makeText((AppCompatActivity)displayView, "Preklapanje sa ciljnom rupom.", Toast.LENGTH_SHORT).show();
+            startHole = startHoles.pop();
+            displayView.updateView();
+            return;
+        }
+
+        for(ParameterCord pc: falseHoles)
+            if(checkPosition(startHole, pc)){
+                //Toast.makeText((AppCompatActivity)displayView, "Preklapanje sa pogrešnom rupom.", Toast.LENGTH_SHORT).show();
+                startHole = startHoles.pop();
+                displayView.updateView();
+                return;
+            }
+
+        for(int i = 0; i < startWall.size(); i++)
+            if(checkWallPositionHole(startHole, startWall.get(i), endWall.get(i))){
+                //Toast.makeText((AppCompatActivity)displayView, "Preklapanje sa zidom.", Toast.LENGTH_SHORT).show();
+                startHole = startHoles.pop();
+                displayView.updateView();
+                return;
+            }
+
+        lastAdded = insertMode.startRupa;
+        displayView.updateView();
+    }
+
+    public void setTrueHole(float x, float y, DrawingView imageView){
+
+        trueHoles.push(new ParameterCord(trueHole.x, trueHole.y));
+
+        trueHole.x = x; // viewCoords[0] is the X coordinate
+        trueHole.y = y; // viewCoords[1] is the y coordinate
+
+        if(trueHole.x - 90 <= 0) trueHole.x = 90;
+        if(trueHole.x + 90 >= imageView.getWidth()) trueHole.x = imageView.getWidth() - 90;
+
+        if(trueHole.y - 90 <= 0) trueHole.y = 90;
+        if(trueHole.y + 90 >= imageView.getHeight()) trueHole.y = imageView.getHeight() - 90;
+
+        if(checkPosition(trueHole, startHole)){
+            //Toast.makeText((AppCompatActivity)displayView, "Preklapanje sa startnom rupom.", Toast.LENGTH_SHORT).show();
+            trueHole = trueHoles.pop();
+            displayView.updateView();
+            return;
+        }
+
+        for(ParameterCord pc: falseHoles)
+            if(checkPosition(trueHole, pc)){
+                //Toast.makeText((AppCompatActivity)displayView, "Preklapanje sa pogrešnom rupom.", Toast.LENGTH_SHORT).show();
+                trueHole = trueHoles.pop();
+                displayView.updateView();
+                return;
+            }
+
+        for(int i = 0; i < startWall.size(); i++)
+            if(checkWallPositionHole(trueHole, startWall.get(i), endWall.get(i))){
+                //Toast.makeText((AppCompatActivity)displayView, "Preklapanje sa zidom.", Toast.LENGTH_SHORT).show();
+                trueHole = trueHoles.pop();
+                displayView.updateView();
+                return;
+            }
+
+        lastAdded = insertMode.dobraRupa;
+        displayView.updateView();
+    }
+
+    public void setFalseHole(float x, float y, DrawingView imageView){
+
+        float cordX = x; // viewCoords[0] is the X coordinate
+        float cordY = y; // viewCoords[1] is the y coordinate
+
+        if(cordX - 90 <= 0) cordX = 90;
+        if(cordX + 90 >= imageView.getWidth()) cordX = imageView.getWidth() - 90;
+
+        if(cordY - 90 <= 0) cordY = 90;
+        if(cordY + 90 >= imageView.getHeight()) cordY = imageView.getHeight() - 90;
+
+        boolean canAdd = true;
+        ParameterCord tempFalseHole = new ParameterCord(cordX, cordY);
+
+
+        if(checkPosition(tempFalseHole, startHole)){
+            canAdd = false;
+            //Toast.makeText((AppCompatActivity)displayView, "Preklapanje sa početnom rupom.", Toast.LENGTH_SHORT).show();
+        }
+
+        if(checkPosition(tempFalseHole, trueHole)){
+            canAdd = false;
+            //Toast.makeText((AppCompatActivity)displayView, "Preklapanje sa ciljnom rupom.", Toast.LENGTH_SHORT).show();
+        }
+
+        for(int i = 0; i < startWall.size(); i++)
+            if(checkWallPositionHole(tempFalseHole, startWall.get(i), endWall.get(i))){
+                canAdd = false;
+                //Toast.makeText((AppCompatActivity)displayView, "Preklapanje sa zidom.", Toast.LENGTH_SHORT).show();
+            }
+
+        if(canAdd){
             for(int i = 0; i < falseHoles.size(); i++){
-
                 ParameterCord pc = falseHoles.get(i);
-
-                startX = pc.x - 90;
-                endX = pc.x + 90;
-                startY = pc.y - 90;
-                endY = pc.y + 90;
-
-                xIn = false;
-                yIn = false;
-
-                if((startCordX >= startX && startCordX <= endX) || (endCordX >= startX && endCordX <= endX)) xIn = true;
-                if((startCordY >= startY && startCordY <= endY) || (endCordY >= startY && endCordY <= endY)) yIn = true;
-
-                if(xIn && yIn){
+                if(checkPosition(tempFalseHole, pc)){
                     canAdd = false;
                     falseHoles.remove(pc);
                     i--;
                     erasedFalseHole = pc;
                     lastAdded = insertMode.obrisanaLosaRupa;
-                    Toast.makeText((AppCompatActivity)displayView, "Preklapanje sa drugom rupom i brisanje.", Toast.LENGTH_SHORT).show();
+                    //Toast.makeText((AppCompatActivity)displayView, "Preklapanje sa drugom rupom i brisanje.", Toast.LENGTH_SHORT).show();
                     break;
                 }
             }
         }
 
-        if(canAdd){ falseHoles.add(new ParameterCord(cordX, cordY)); lastAdded = insertMode.losaRupa; }
+        if(canAdd){ falseHoles.add(tempFalseHole); lastAdded = insertMode.losaRupa; }
 
         displayView.updateView();
     }
@@ -173,31 +288,29 @@ public class DrawingController implements Serializable {
 
         boolean canAdd = true;
 
-        float startX = trueHole.x - 90;
-        float endX = trueHole.x + 90;
-        float startY = trueHole.y - 90;
-        float endY = trueHole.y + 90;
-
-        boolean xIn = false;
-        boolean yIn = false;
-
-        float left = startW.x > endW.x ? endW.x : startW.x;
-        float top = startW.y > endW.y ? endW.y : startW.y;
-        float right = startW.x > endW.x ? startW.x : endW.x;
-        float bottom = startW.y > endW.y ? startW.y : endW.y;
-/*
-        if((startCordX >= startX && startCordX <= endX) || (endCordX >= startX && endCordX <= endX)) xIn = true;
-        if((startCordY >= startY && startCordY <= endY) || (endCordY >= startY && endCordY <= endY)) yIn = true;
-*/
-        if(xIn && yIn){
+        if(checkWallPositionHole(startHole, startW, endW)){
             canAdd = false;
-            Toast.makeText((AppCompatActivity)displayView, "Preklapanje sa početnom rupom i brisanje.", Toast.LENGTH_SHORT).show();
+            //Toast.makeText((AppCompatActivity)displayView, "Preklapanje zida sa startnom rupom.", Toast.LENGTH_SHORT).show();
         }
 
+        if(checkWallPositionHole(trueHole, startW, endW)){
+            canAdd = false;
+            //Toast.makeText((AppCompatActivity)displayView, "Preklapanje zida sa ciljnom rupom.", Toast.LENGTH_SHORT).show();
+        }
 
-        startWall.add(startW);
-        endWall.add(endW);
-        lastAdded = insertMode.zid;
+        for(ParameterCord pc: falseHoles)
+            if(checkWallPositionHole(pc, startW, endW)){
+                canAdd = false;
+                //Toast.makeText((AppCompatActivity)displayView, "Preklapanje zida sa pogrešnom rupom.", Toast.LENGTH_SHORT).show();
+            }
+
+        if(canAdd){
+            startWall.add(startW);
+            endWall.add(endW);
+            lastAdded = insertMode.zid;
+        }
+
+        tempStartW = tempEndW = null;
         displayView.updateView();
     }
 
@@ -243,10 +356,10 @@ public class DrawingController implements Serializable {
         startWall = new ArrayList<ParameterCord>();
         endWall = new ArrayList<ParameterCord>();
 
-        trueHole = new ParameterCord(0, 0);
+        trueHole = new ParameterCord(-100, -100);
         trueHoles = new Stack<ParameterCord>();
 
-        startHole = new ParameterCord(0, 0);
+        startHole = new ParameterCord(-100, -100);
         startHoles = new Stack<ParameterCord>();
 
         lastAdded = insertMode.obrisanoSve;
@@ -269,7 +382,7 @@ public class DrawingController implements Serializable {
 
             ArrayList<ParameterCord> falseHolesUniform = new ArrayList<ParameterCord>();
             for(ParameterCord pc: falseHoles){
-                ParameterCord tempPc = new ParameterCord(0, 0);
+                ParameterCord tempPc = new ParameterCord(-100, -100);
                 tempPc.x = (pc.x * 100) / imageView.getWidth();
                 tempPc.y = (pc.y * 100) / imageView.getHeight();
                 falseHolesUniform.add(tempPc);
@@ -279,12 +392,12 @@ public class DrawingController implements Serializable {
             ArrayList<ParameterCord> endWallUniform = new ArrayList<ParameterCord>();
             for(int i = 0; i < startWall.size(); i++){
 
-                ParameterCord tempPc1 = new ParameterCord(0, 0);
+                ParameterCord tempPc1 = new ParameterCord(-100, -100);
 
                 tempPc1.x = (startWall.get(i).x * 100) / imageView.getWidth();
                 tempPc1.y = (startWall.get(i).y * 100) / imageView.getHeight();
 
-                ParameterCord tempPc2 = new ParameterCord(0, 0);
+                ParameterCord tempPc2 = new ParameterCord(-100, -100);
 
                 tempPc2.x = (endWall.get(i).x * 100) / imageView.getWidth();
                 tempPc2.y = (endWall.get(i).y * 100) / imageView.getHeight();
@@ -300,7 +413,7 @@ public class DrawingController implements Serializable {
         } catch (Exception ex){ return false; }
     }
 
-    private class AllTempSave{
+    private class AllTempSave implements Serializable{
         public ArrayList<ParameterCord> oldFalseHoles;
         public ArrayList<ParameterCord> oldStartWall;
         public ArrayList<ParameterCord> oldEndWall;
@@ -321,11 +434,11 @@ public class DrawingController implements Serializable {
 
         boolean canWriteFile = true;
 
-        if(startHole.x == 0 && startHole.y == 0){
+        if(startHole.x == -100 && startHole.y == -100){
             canWriteFile = false;
             Toast.makeText((AppCompatActivity)displayView, "Molimo Vas, ubacite startno polje.", Toast.LENGTH_SHORT).show();
         }
-        if(trueHole.x == 0 && trueHole.y == 0){
+        if(trueHole.x == -100 && trueHole.y == -100){
             canWriteFile = false;
             Toast.makeText((AppCompatActivity)displayView, "Molimo Vas, ubacite ciljnu rupu.", Toast.LENGTH_SHORT).show();
         }
@@ -337,10 +450,29 @@ public class DrawingController implements Serializable {
 
                 File dir1 = new File(root.getAbsolutePath() + "/Poligoni");
                 if(!dir1.exists()) dir1.mkdir();
-                String poligonName = new Date().toString();
-                File dir2 = new File(dir1.getAbsolutePath() + "/poligon_" + poligonName);
+                String poligonName;
+                File[] files = dir1.listFiles();
+                if(files != null){
+                    ArrayList<String> folderNames = new ArrayList<String>();
+                    for(File f: files) folderNames.add(f.getName());
+                    int numOfFile = 1;
+                    poligonName = "Level" + numOfFile;
+                    boolean foundName = true;
+                    while (foundName){
+                        boolean equals = false;
+                        for(String name: folderNames)
+                            if(name.equals(poligonName)){ equals = true; break; }
+                        if(equals){
+                            numOfFile++;
+                            poligonName = "Level" + numOfFile;
+                        } else foundName = false;
+                    }
+                } else poligonName = "Level1";
+
+
+                File dir2 = new File(dir1.getAbsolutePath() + "/" + poligonName);
                 if(!dir2.exists()) dir2.mkdir();
-                File polFile = new File(dir2.getAbsolutePath() + "/poligon_" + poligonName + ".obj");
+                File polFile = new File(dir2.getAbsolutePath() + "/" + poligonName + ".obj");
                 if(!polFile.exists()) dir2.mkdir();
 
                 FileOutputStream fileOutputStream = new FileOutputStream(polFile);

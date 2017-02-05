@@ -1,7 +1,9 @@
 package rs.ac.bg.etf.dm130240d.poligon.game;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.SharedPreferences;
+import android.media.MediaPlayer;
 import android.os.AsyncTask;
 import android.preference.PreferenceManager;
 import android.support.v7.app.AppCompatActivity;
@@ -16,6 +18,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 
 import rs.ac.bg.etf.dm130240d.poligon.ParameterCord;
+import rs.ac.bg.etf.dm130240d.poligon.R;
 import rs.ac.bg.etf.dm130240d.poligon.db.DbModel;
 import rs.ac.bg.etf.dm130240d.poligon.interfaces.ViewInterface;
 
@@ -28,18 +31,18 @@ public class GameController implements Serializable {
     private String mapPath, mapName;
     private ParameterCord currentBall, trueHole, startHole, imageViewCord, startSensorCord, lastRemainder;
     private ArrayList<ParameterCord> falseHoles, startWall, endWall;
-    private transient ViewInterface displayView;
+    private ViewInterface displayView;
     private boolean gameOver = false;
     private boolean hasWon = false;
     private transient DbModel dbModel;
     private boolean sqlInsertResult;
-    private int otpor;
-    private float hitWallLeft, hitWallRight, hitWallTop, hitWallBottom;
-    private float currentHitWallLeft, currentHitWallRight, currentHitWallTop, currentHitWallBottom;
+    private int otpor, odbijanje;
+    private float izracunatOtpor, izracunatoOdbijanje;
+    private double ballStopBorder;
 
     protected static final int SLEEP_INTERVAL = 50;
 
-    protected Thread worker;
+    protected transient Thread worker;
 
     protected TimerModel model;
 
@@ -47,6 +50,9 @@ public class GameController implements Serializable {
 
         SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences((AppCompatActivity)displayView);
         otpor = sp.getInt("otpor", 5);
+        odbijanje = sp.getInt("faktor_odbijanja", 5);
+
+        izracunatoOdbijanje = (15 + ((float)odbijanje * 5)) / 100;
 
         this.displayView = displayView;
         this.mapPath = mapPath;
@@ -60,9 +66,6 @@ public class GameController implements Serializable {
         trueHole = new ParameterCord(0, 0);
         startHole = new ParameterCord(0, 0);
         lastRemainder = new ParameterCord(0, 0);
-
-        hitWallLeft = hitWallTop = hitWallRight = hitWallBottom = 0;
-        currentHitWallLeft = currentHitWallTop = currentHitWallRight = currentHitWallBottom = 0;
 
         model = m;
 
@@ -152,6 +155,9 @@ public class GameController implements Serializable {
         try{
 
             this.imageViewCord = new ParameterCord(imageView.getWidth(), imageView.getHeight());
+            double konstanta = 0.01;
+            if(otpor >= 1 && otpor <= 3) konstanta = 0.03;
+            ballStopBorder = (Math.abs(imageViewCord.y - imageViewCord.x)/2)*konstanta;
 
             startHole.x = (startHole.x * imageView.getWidth()) / 100;
             startHole.y = (startHole.y * imageView.getHeight()) / 100;
@@ -182,32 +188,10 @@ public class GameController implements Serializable {
 
     public void moveBall(float x, float y){
 
-        float nextX = (x - startSensorCord.x) + lastRemainder.x;
-        float nextY = (y - startSensorCord.y) + lastRemainder.y;
+        float otporIzracunat = ((float)1)/otpor;
 
-        if(hitWallTop != 0 || hitWallBottom != 0){
-            if(hitWallTop != 0){
-                nextX = hitWallTop > 0 ? currentHitWallTop++ : currentHitWallTop--;
-                if(hitWallTop == currentHitWallTop) currentHitWallTop = hitWallTop = 0;
-            }
-
-            if(hitWallBottom != 0){
-                nextX = hitWallBottom > 0 ? currentHitWallBottom++ : currentHitWallBottom--;
-                if(hitWallBottom == currentHitWallBottom) currentHitWallBottom = hitWallBottom = 0;
-            }
-        }
-
-        if(hitWallLeft != 0 || hitWallRight != 0){
-            if(hitWallLeft != 0){
-                nextX = hitWallLeft > 0 ? currentHitWallLeft++ : currentHitWallLeft--;
-                if(hitWallLeft == currentHitWallLeft) currentHitWallLeft = hitWallLeft = 0;
-            }
-
-            if(hitWallRight != 0){
-                nextX = hitWallRight > 0 ? currentHitWallRight++ : currentHitWallRight--;
-                if(hitWallRight == currentHitWallRight) currentHitWallRight = hitWallRight = 0;
-            }
-        }
+        float nextX = (x*otporIzracunat) + lastRemainder.x;
+        float nextY = (y*otporIzracunat) + lastRemainder.y;
 
         lastRemainder.x = nextX;
         lastRemainder.y = nextY;
@@ -220,7 +204,7 @@ public class GameController implements Serializable {
 
         float distanceTrueHole = (float) Math.sqrt(Math.pow((testX - trueHole.x), 2) + Math.pow((testY - trueHole.y), 2));
         if((distanceTrueHole + 75) <= 90){
-            Toast.makeText((AppCompatActivity)displayView, "CESTITAMO!", Toast.LENGTH_SHORT).show();
+            Toast.makeText((AppCompatActivity)displayView, "Čestitamo, pobedili ste!", Toast.LENGTH_SHORT).show();
             currentBall.x = 0;
             currentBall.y = 0;
             lastRemainder.x = 0;
@@ -234,8 +218,8 @@ public class GameController implements Serializable {
 
         for(ParameterCord pc: falseHoles){
             float distanceFalseHole = (float) Math.sqrt(Math.pow((testX - pc.x), 2) + Math.pow((testY - pc.y), 2));
-            if((distanceFalseHole + 75) <= 90){
-                Toast.makeText((AppCompatActivity)displayView, "GAME OVER!", Toast.LENGTH_SHORT).show();
+            if(distanceFalseHole <= 90){
+                Toast.makeText((AppCompatActivity)displayView, "Nažalost, izgubili ste.", Toast.LENGTH_SHORT).show();
                 currentBall.x = 0;
                 currentBall.y = 0;
                 lastRemainder.x = 0;
@@ -248,12 +232,90 @@ public class GameController implements Serializable {
             }
         }
 
-        if((nextX + currentBall.y) <= 75){ nextX *= -1; lastRemainder.x = 0; hitWallTop = nextX < 0 ? 2 : -2; currentHitWallTop = 0; currentBall.y = 75; canChangeY = false; }
-        if((nextX + currentBall.y + 75) >= imageViewCord.y){ nextX *= -1; lastRemainder.x = 0; hitWallBottom = nextX < 0 ? 2 : -2; currentHitWallBottom = 0;  currentBall.y = imageViewCord.y - 75; canChangeY = false; }
+        if((nextX + currentBall.y) <= 75){
+            nextX = (float)izracunatoOdbijanje*nextX*(-1);
+            lastRemainder.x = nextX;
+            if(Math.abs(nextX) <= ballStopBorder || currentBall.y == 75){
+                lastRemainder.x = 0;
+                nextX = 0;
+                currentBall.y = 75;
+                canChangeY = false;
+            } else{
+                (new AsyncTask<Void, Void, Void>(){
 
+                    @Override
+                    protected Void doInBackground(Void... voids) {
+                        MediaPlayer hitWallSound = MediaPlayer.create((Context)displayView, R.raw.hit_wall);
+                        hitWallSound.start();
+                        return null;
+                    }
+                }).execute();
+            }
 
-        if((nextY + currentBall.x) <= 75){ nextY *= -1; lastRemainder.y = 0; hitWallLeft = nextY < 0 ? 2 : -2; currentHitWallLeft = 0; currentBall.x = 75; canChangeX = false; }
-        if((nextY + currentBall.x + 75) >= imageViewCord.x){ nextY *= -1; lastRemainder.y = 0; hitWallRight = nextY < 0 ? 2 : -2; currentHitWallRight = 0; currentBall.x = imageViewCord.x - 75; canChangeX = false; }
+        }
+        if((nextX + currentBall.y + 75) >= imageViewCord.y){
+            nextX = (float)izracunatoOdbijanje*nextX*(-1);
+            lastRemainder.x = nextX;
+            if(Math.abs(nextX) <= ballStopBorder || currentBall.y == imageViewCord.y - 75){
+                lastRemainder.x = 0;
+                nextX = 0;
+                currentBall.y = imageViewCord.y - 75;
+                canChangeY = false;
+            } else{
+                (new AsyncTask<Void, Void, Void>(){
+
+                    @Override
+                    protected Void doInBackground(Void... voids) {
+                        MediaPlayer hitWallSound = MediaPlayer.create((Context)displayView, R.raw.hit_wall);
+                        hitWallSound.start();
+                        return null;
+                    }
+                }).execute();
+            }
+
+        }
+
+        if((nextY + currentBall.x) <= 75){
+            nextY = (float)izracunatoOdbijanje*nextY*(-1);
+
+            lastRemainder.y = nextY;
+            if(Math.abs(nextY) <= ballStopBorder || currentBall.x == 75){
+                lastRemainder.y = 0;
+                nextY = 0;
+                currentBall.x = 75;
+                canChangeX = false;
+            } else{
+                (new AsyncTask<Void, Void, Void>(){
+
+                    @Override
+                    protected Void doInBackground(Void... voids) {
+                        MediaPlayer hitWallSound = MediaPlayer.create((Context)displayView, R.raw.hit_wall);
+                        hitWallSound.start();
+                        return null;
+                    }
+                }).execute();
+            }
+        }
+        if((nextY + currentBall.x + 75) >= imageViewCord.x){
+            nextY = (float)izracunatoOdbijanje*nextY*(-1);
+            lastRemainder.y = nextY;
+            if(Math.abs(nextY) <= ballStopBorder || currentBall.x == imageViewCord.x - 75){
+                lastRemainder.y = 0;
+                nextY = 0;
+                currentBall.x = imageViewCord.x - 75;
+                canChangeX = false;
+            } else{
+                (new AsyncTask<Void, Void, Void>(){
+
+                    @Override
+                    protected Void doInBackground(Void... voids) {
+                        MediaPlayer hitWallSound = MediaPlayer.create((Context)displayView, R.raw.hit_wall);
+                        hitWallSound.start();
+                        return null;
+                    }
+                }).execute();
+            }
+        }
 
         if(!canChangeX && !canChangeY){ displayView.updateView(); return; }
 
@@ -267,17 +329,33 @@ public class GameController implements Serializable {
             if(canChangeY && ((nextY + currentBall.x) < right) && ((nextY + currentBall.x) > left)){
                 if(((nextX + currentBall.y) >= (top - 75)) && ((nextX + currentBall.y) <= (75 + bottom))){
 
-                    if((currentBall.y <= ((top + ((bottom - top)/2)) - 75))){
-                        nextX *= -1;
-                        lastRemainder.x = nextX < 0 ? 2 : -2;
+                    nextX = (float)izracunatoOdbijanje*nextX*(-1);
+                    lastRemainder.x = nextX;
+                    if((Math.abs(nextX) <= ballStopBorder && currentBall.y <= ((top + ((bottom - top)/2)) - 75)) || currentBall.y == top - 75){
+                        lastRemainder.x = 0;
+                        nextX = 0;
                         currentBall.y = top - 75;
+                        canChangeY = false;
                     }
-                    if(currentBall.y >= ((top + ((bottom - top)/2)) - 75)){
-                        nextX *= -1;
-                        lastRemainder.x = nextX < 0 ? 2 : -2;
+
+                    if((Math.abs(nextX) <= ballStopBorder && currentBall.y >= ((top + ((bottom - top)/2)) + 75)) || currentBall.y == bottom + 75){
+                        lastRemainder.x = 0;
+                        nextX = 0;
                         currentBall.y = bottom + 75;
+                        canChangeY = false;
                     }
-                    canChangeY = false;
+
+                    if(canChangeY){
+                        (new AsyncTask<Void, Void, Void>(){
+
+                            @Override
+                            protected Void doInBackground(Void... voids) {
+                                MediaPlayer hitWallSound = MediaPlayer.create((Context)displayView, R.raw.hit_wall);
+                                hitWallSound.start();
+                                return null;
+                            }
+                        }).execute();
+                    }
                 }
             }
 
@@ -286,17 +364,33 @@ public class GameController implements Serializable {
             if(canChangeX && (helpY < bottom) && (helpY > top)){
                 if(((nextY + currentBall.x) >= (left - 75)) && ((nextY + currentBall.x) <= (75 + right))){
 
-                    if(currentBall.x <= ((left + ((right - left)/2)) - 75)){
-                        nextY *= -1;
-                        lastRemainder.y = nextY < 0 ? 2 : -2;
+                    nextY = (float)izracunatoOdbijanje*nextY*(-1);
+                    lastRemainder.y = nextY;
+                    if((Math.abs(nextY) <= ballStopBorder && currentBall.x <= ((left + ((right - left)/2)) - 75)) || currentBall.x == left - 75){
+                        lastRemainder.y = 0;
+                        nextY = 0;
                         currentBall.x = left - 75;
+                        canChangeX = false;
                     }
-                    if(currentBall.x >= ((left + ((right - left)/2)) - 75)){
-                        nextY *= -1;
-                        lastRemainder.y = nextY < 0 ? 2 : -2;
+
+                    if((Math.abs(nextY) <= ballStopBorder && currentBall.x >= ((left + ((right - left)/2)) + 75)) || currentBall.x == right + 75){
+                        lastRemainder.y = 0;
+                        nextY = 0;
                         currentBall.x = right + 75;
+                        canChangeX = false;
                     }
-                    canChangeX = false;
+
+                    if(canChangeX){
+                        (new AsyncTask<Void, Void, Void>(){
+
+                            @Override
+                            protected Void doInBackground(Void... voids) {
+                                MediaPlayer hitWallSound = MediaPlayer.create((Context)displayView, R.raw.hit_wall);
+                                hitWallSound.start();
+                                return null;
+                            }
+                        }).execute();
+                    }
                 }
             }
         }

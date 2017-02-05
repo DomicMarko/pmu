@@ -226,7 +226,7 @@ public class SettingsActivity extends PreferenceActivity {
             // updated to reflect the new value, per the Android Design
             // guidelines.
             bindPreferenceSummaryToValue2(findPreference("otpor"));
-            bindPreferenceSummaryToValue(findPreference("faktor_odbijanja"));
+            bindPreferenceSummaryToValue2(findPreference("faktor_odbijanja"));
 
             //Initialize the preference object by obtaining a handle to the ResetDefDiagPref object as a Preference
             this.resetDialogPreference = getPreferenceScreen().findPreference("resetDialog");

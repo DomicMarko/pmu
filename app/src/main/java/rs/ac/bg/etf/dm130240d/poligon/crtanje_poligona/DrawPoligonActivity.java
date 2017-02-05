@@ -62,19 +62,19 @@ public class DrawPoligonActivity extends AppCompatActivity implements ViewInterf
                         startWall = endWall = false;
                         startWallCord = endWallCord = null;
                         maxDist = 0;
-                        if(motionEvent.getAction() == MotionEvent.ACTION_UP) controller.setStartHole(motionEvent.getX(), motionEvent.getY(), imageView, actionBar.getHeight());
+                        controller.setStartHole(motionEvent.getX(), motionEvent.getY(), imageView);
                         break;
                     case 1:
                         startWall = endWall = false;
                         startWallCord = endWallCord = null;
                         maxDist = 0;
-                        if(motionEvent.getAction() == MotionEvent.ACTION_UP) controller.setTrueHole(motionEvent.getX(), motionEvent.getY(), imageView, actionBar.getHeight());
+                        controller.setTrueHole(motionEvent.getX(), motionEvent.getY(), imageView);
                         break;
                     case 2:
                         startWall = endWall = false;
                         startWallCord = endWallCord = null;
                         maxDist = 0;
-                        if(motionEvent.getAction() == MotionEvent.ACTION_UP) controller.setFalseHole(motionEvent.getX(), motionEvent.getY(), imageView, actionBar.getHeight());
+                        if(motionEvent.getAction() == MotionEvent.ACTION_UP) controller.setFalseHole(motionEvent.getX(), motionEvent.getY(), imageView);
                         break;
                     case 3:
 
@@ -92,10 +92,11 @@ public class DrawPoligonActivity extends AppCompatActivity implements ViewInterf
 
                         double result = Math.sqrt(Math.pow(dx, 2) + Math.pow(dy, 2));
 
-                        if(result >= 100 && result >= maxDist){
+                        if(startWall){
                             maxDist = result;
                             endWallCord = new ParameterCord(motionEvent.getX(), motionEvent.getY());
                             endWall = true;
+                            controller.drawingWall(startWallCord, endWallCord);
                         }
 
                         if(startWall && motionEvent.getAction() == MotionEvent.ACTION_UP && !endWall){

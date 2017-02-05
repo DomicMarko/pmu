@@ -71,12 +71,15 @@ public class DrawingView extends ImageView {
 	@Override
 	protected void onDraw(Canvas canvas) {
 
-		if(controller.getStartHole().x != 0 && controller.getStartHole().y != 0) {
+		ParameterCord tempStartW = controller.getTempStartW();
+		ParameterCord tempEndW = controller.getTempEndW();
+
+		if(controller.getStartHole().x != -100 && controller.getStartHole().y != -100) {
 			canvas.drawCircle(controller.getStartHole().x, controller.getStartHole().y, 90, startHolePaint);
 			canvas.drawCircle(controller.getStartHole().x, controller.getStartHole().y, 75, startHolePaint2);
 		}
 
-		if(controller.getTrueHole().x != 0 && controller.getTrueHole().y != 0) {
+		if(controller.getTrueHole().x != -100 && controller.getTrueHole().y != -100) {
 			canvas.drawCircle(controller.getTrueHole().x, controller.getTrueHole().y, 90, trueHolePaint);
 			canvas.drawCircle(controller.getTrueHole().x, controller.getTrueHole().y, 75, trueHolePaint2);
 		}
@@ -100,6 +103,17 @@ public class DrawingView extends ImageView {
 				canvas.drawRect(left, top, right, bottom, zidPaint2);
 				canvas.drawRect(left+15, top+15, right-15, bottom-15, zidPaint);
 			}
+		}
+
+		if(tempStartW != null && tempEndW != null){
+
+			float left = tempStartW.x > tempEndW.x ? tempEndW.x : tempStartW.x;
+			float top = tempStartW.y > tempEndW.y ? tempEndW.y : tempStartW.y;
+			float right = tempStartW.x > tempEndW.x ? tempStartW.x : tempEndW.x;
+			float bottom = tempStartW.y > tempEndW.y ? tempStartW.y : tempEndW.y;
+
+			canvas.drawRect(left, top, right, bottom, zidPaint2);
+			canvas.drawRect(left+15, top+15, right-15, bottom-15, zidPaint);
 		}
 
 		super.onDraw(canvas);

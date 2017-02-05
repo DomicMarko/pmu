@@ -6,7 +6,7 @@
     <string name="option_3">Podešavanja</string>
 
     <string name="draw_menu_nista_option">Stop crtanju</string>
-    <string name="draw_menu_start_option">Pošetni položaj kuglice</string>
+    <string name="draw_menu_start_option">Početni položaj kuglice</string>
     <string name="draw_menu_true_rupa_option">Ciljna rupa</string>
     <string name="draw_menu_false_rupa_option">Pogrešna rupa</string>
     <string name="draw_menu_zid_option">Zid</string>

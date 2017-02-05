@@ -9,15 +9,18 @@ import android.os.Bundle;
 import android.support.v4.app.FragmentManager;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
+import android.view.WindowManager;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import java.io.Serializable;
 
 import rs.ac.bg.etf.dm130240d.poligon.R;
 import rs.ac.bg.etf.dm130240d.poligon.db.DbModel;
 import rs.ac.bg.etf.dm130240d.poligon.interfaces.ViewInterface;
 import rs.ac.bg.etf.dm130240d.poligon.statistics.ListStatisticsActivity;
 
-public class GameActivity extends AppCompatActivity implements ViewInterface, SensorEventListener {
+public class GameActivity extends AppCompatActivity implements ViewInterface, SensorEventListener, Serializable {
 
     private static final String KEY_GAME_CONTROLLER = "rs.ac.bg.etf.dm130240d.poligon.game.GameController";
 
@@ -35,6 +38,7 @@ public class GameActivity extends AppCompatActivity implements ViewInterface, Se
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         setContentView(R.layout.activity_game);
 
         paramsCalculated = false;
@@ -62,6 +66,7 @@ public class GameActivity extends AppCompatActivity implements ViewInterface, Se
         } else {
             controller = (GameController) savedInstanceState.getSerializable(KEY_GAME_CONTROLLER);
             controller.setDisplayView(this);
+            controller.start_timer();
 
             DbModel dbModel = new DbModel(this);
             controller.setDbModel(dbModel);
@@ -142,6 +147,7 @@ public class GameActivity extends AppCompatActivity implements ViewInterface, Se
                     SaveResultFragment dialogFragment = new SaveResultFragment().newInstance(controller.getEndTime());
                     dialogFragment.show(fm, "Save result Fragment");
                 }
+                if(controller.isGameOver() && !controller.isHasWon()) finish();
             }
         });
     }

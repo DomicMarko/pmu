@@ -12,14 +12,9 @@
             android:key="otpor"
             android:title="@string/pref_title_otpor_label" />
 
-        <EditTextPreference
-            android:capitalize="words"
-            android:defaultValue="4"
-            android:inputType="number"
+        <rs.ac.bg.etf.dm130240d.poligon.settings.NumberPickerPreference
+            android:defaultValue="5"
             android:key="faktor_odbijanja"
-            android:maxLines="1"
-            android:selectAllOnFocus="true"
-            android:singleLine="true"
             android:title="@string/pref_title_faktor_odbijanja_label" />
 
     </PreferenceCategory>
