@@ -1,9 +1,7 @@
 package rs.ac.bg.etf.dm130240d.poligon.game;
 
 import android.app.Activity;
-import android.content.Context;
 import android.content.SharedPreferences;
-import android.media.MediaPlayer;
 import android.os.AsyncTask;
 import android.preference.PreferenceManager;
 import android.support.v7.app.AppCompatActivity;
@@ -18,7 +16,6 @@ import java.io.Serializable;
 import java.util.ArrayList;
 
 import rs.ac.bg.etf.dm130240d.poligon.ParameterCord;
-import rs.ac.bg.etf.dm130240d.poligon.R;
 import rs.ac.bg.etf.dm130240d.poligon.db.DbModel;
 import rs.ac.bg.etf.dm130240d.poligon.interfaces.ViewInterface;
 
@@ -28,17 +25,24 @@ import rs.ac.bg.etf.dm130240d.poligon.interfaces.ViewInterface;
 
 public class GameController implements Serializable {
 
+    private static final float NS2S = 1.0f / 1000000000.0f;
+
     private String mapPath, mapName;
-    private ParameterCord currentBall, trueHole, startHole, imageViewCord, startSensorCord, lastRemainder;
+    private ParameterCord currentBall, oldBall, trueHole, startHole, imageViewCord, startSensorCord, lastRemainder;
+    private ParameterCord speedStart;
     private ArrayList<ParameterCord> falseHoles, startWall, endWall;
-    private ViewInterface displayView;
+    private transient ViewInterface displayView;
     private boolean gameOver = false;
     private boolean hasWon = false;
+    private boolean canMoveBall = false;
+    private boolean rotating;
     private transient DbModel dbModel;
     private boolean sqlInsertResult;
     private int otpor, odbijanje;
     private float izracunatOtpor, izracunatoOdbijanje;
     private double ballStopBorder;
+    private long lastTime, lastRotatingTime;
+    //private MediaPlayer hitWallSound;
 
     protected static final int SLEEP_INTERVAL = 50;
 
@@ -52,6 +56,7 @@ public class GameController implements Serializable {
         otpor = sp.getInt("otpor", 5);
         odbijanje = sp.getInt("faktor_odbijanja", 5);
 
+        izracunatOtpor = ((float)1)/otpor;
         izracunatoOdbijanje = (15 + ((float)odbijanje * 5)) / 100;
 
         this.displayView = displayView;
@@ -63,11 +68,20 @@ public class GameController implements Serializable {
         endWall = new ArrayList<ParameterCord>();
 
         currentBall = new ParameterCord(0, 0);
+        oldBall = new ParameterCord(0, 0);
         trueHole = new ParameterCord(0, 0);
         startHole = new ParameterCord(0, 0);
         lastRemainder = new ParameterCord(0, 0);
 
+        speedStart = new ParameterCord(0, 0);
+
+        //hitWallSound = MediaPlayer.create((Context)displayView, R.raw.hit_wall);
+
         model = m;
+        canMoveBall = false;
+        rotating = false;
+
+        lastRotatingTime = -1;
 
         worker = null;
     }
@@ -186,373 +200,567 @@ public class GameController implements Serializable {
         } catch (Exception ex){ }
     }
 
-    public void moveBall(float x, float y){
+    public boolean isOnWall(float left, float top, float right, float bottom){
 
-        float otporIzracunat = ((float)1)/otpor;
+        if(oldBall.x <= right && oldBall.x >= left && oldBall.y >= (top - 75) && oldBall.y <= (75 + bottom))
+            if(oldBall.y <= top - 73.5 || oldBall.y >= bottom + 73.5) return true;
 
-        float nextX = (x*otporIzracunat) + lastRemainder.x;
-        float nextY = (y*otporIzracunat) + lastRemainder.y;
+        if(oldBall.y <= bottom && oldBall.y >= top && oldBall.x >= (left - 75) && oldBall.x <= (75 + right))
+            if(oldBall.x <= left - 73.5 || oldBall.x >= right + 73.5) return true;
+/*
+        ParameterCord topLeft = new ParameterCord(left, top);
+        ParameterCord topRight = new ParameterCord(right, top);
+        ParameterCord bottomRight = new ParameterCord(right, bottom);
+        ParameterCord bottomLeft = new ParameterCord(left, bottom);
 
-        lastRemainder.x = nextX;
-        lastRemainder.y = nextY;
+        float distance = (float) Math.sqrt(Math.pow((oldBall.x - topLeft.x), 2) + Math.pow((oldBall.y - topLeft.y), 2));
+        if (distance <= 78 && oldBall.x < left && oldBall.y < top) return true;
 
-        float testX = currentBall.x + nextY;
-        float testY = currentBall.y + nextX;
+        distance = (float) Math.sqrt(Math.pow((oldBall.x - topRight.x), 2) + Math.pow((oldBall.y - topRight.y), 2));
+        if (distance <= 78 && oldBall.x > right && oldBall.y < top) return true;
 
-        boolean canChangeX = true;
-        boolean canChangeY = true;
+        distance = (float) Math.sqrt(Math.pow((oldBall.x - bottomRight.x), 2) + Math.pow((oldBall.y - bottomRight.y), 2));
+        if (distance <= 78 && oldBall.x > right && oldBall.y > bottom) return true;
 
-        float distanceTrueHole = (float) Math.sqrt(Math.pow((testX - trueHole.x), 2) + Math.pow((testY - trueHole.y), 2));
-        if((distanceTrueHole + 75) <= 90){
-            Toast.makeText((AppCompatActivity)displayView, "Čestitamo, pobedili ste!", Toast.LENGTH_SHORT).show();
-            currentBall.x = 0;
-            currentBall.y = 0;
-            lastRemainder.x = 0;
-            lastRemainder.y = 0;
-            gameOver = true;
-            hasWon = true;
-            stop_timer();
-            displayView.updateView();
-            return;
-        }
+        distance = (float) Math.sqrt(Math.pow((oldBall.x - bottomLeft.x), 2) + Math.pow((oldBall.y - bottomLeft.y), 2));
+        if (distance <= 78 && oldBall.x < left && oldBall.y > bottom) return true;
+*/
+        return false;
+    }
 
-        for(ParameterCord pc: falseHoles){
-            float distanceFalseHole = (float) Math.sqrt(Math.pow((testX - pc.x), 2) + Math.pow((testY - pc.y), 2));
-            if(distanceFalseHole <= 90){
-                Toast.makeText((AppCompatActivity)displayView, "Nažalost, izgubili ste.", Toast.LENGTH_SHORT).show();
+    public void moveBall(float xx, float yy, long time){
+
+        if(this.canMoveBall) {
+
+            float deltaT = (time - lastTime)*NS2S;
+            lastTime = time;
+
+            oldBall.x = currentBall.x;
+            oldBall.y = currentBall.y;
+
+            float x = xx * 200;
+            float y = yy * 200;
+
+            float nextX = currentBall.x + (speedStart.x * deltaT + (float)(y*Math.pow(deltaT, 2))/2);
+            float nextY = currentBall.y + (speedStart.y * deltaT + (float)(x*Math.pow(deltaT, 2))/2);
+
+            speedStart.x += y * deltaT;
+            speedStart.y += x * deltaT;
+
+            boolean canChangeX = true;
+            boolean canChangeY = true;
+
+            float distanceTrueHole = (float) Math.sqrt(Math.pow((nextX - trueHole.x), 2) + Math.pow((nextY - trueHole.y), 2));
+            if((distanceTrueHole + 75) <= 90){
+                Toast.makeText((AppCompatActivity)displayView, "Čestitamo, pobedili ste!", Toast.LENGTH_SHORT).show();
                 currentBall.x = 0;
                 currentBall.y = 0;
                 lastRemainder.x = 0;
                 lastRemainder.y = 0;
                 gameOver = true;
-                hasWon = false;
+                hasWon = true;
                 stop_timer();
                 displayView.updateView();
                 return;
             }
-        }
 
-        if((nextX + currentBall.y) <= 75){
-            nextX = (float)izracunatoOdbijanje*nextX*(-1);
-            lastRemainder.x = nextX;
-            if(Math.abs(nextX) <= ballStopBorder || currentBall.y == 75){
-                lastRemainder.x = 0;
-                nextX = 0;
-                currentBall.y = 75;
-                canChangeY = false;
-            } else{
-                (new AsyncTask<Void, Void, Void>(){
-
-                    @Override
-                    protected Void doInBackground(Void... voids) {
-                        MediaPlayer hitWallSound = MediaPlayer.create((Context)displayView, R.raw.hit_wall);
-                        hitWallSound.start();
-                        return null;
-                    }
-                }).execute();
+            for(ParameterCord pc: falseHoles){
+                float distanceFalseHole = (float) Math.sqrt(Math.pow((nextX - pc.x), 2) + Math.pow((nextY - pc.y), 2));
+                if(distanceFalseHole <= 90){
+                    Toast.makeText((AppCompatActivity)displayView, "Nažalost, izgubili ste.", Toast.LENGTH_SHORT).show();
+                    currentBall.x = 0;
+                    currentBall.y = 0;
+                    lastRemainder.x = 0;
+                    lastRemainder.y = 0;
+                    gameOver = true;
+                    hasWon = false;
+                    stop_timer();
+                    displayView.updateView();
+                    return;
+                }
             }
 
-        }
-        if((nextX + currentBall.y + 75) >= imageViewCord.y){
-            nextX = (float)izracunatoOdbijanje*nextX*(-1);
-            lastRemainder.x = nextX;
-            if(Math.abs(nextX) <= ballStopBorder || currentBall.y == imageViewCord.y - 75){
-                lastRemainder.x = 0;
-                nextX = 0;
-                currentBall.y = imageViewCord.y - 75;
-                canChangeY = false;
-            } else{
-                (new AsyncTask<Void, Void, Void>(){
-
-                    @Override
-                    protected Void doInBackground(Void... voids) {
-                        MediaPlayer hitWallSound = MediaPlayer.create((Context)displayView, R.raw.hit_wall);
-                        hitWallSound.start();
-                        return null;
-                    }
-                }).execute();
-            }
-
-        }
-
-        if((nextY + currentBall.x) <= 75){
-            nextY = (float)izracunatoOdbijanje*nextY*(-1);
-
-            lastRemainder.y = nextY;
-            if(Math.abs(nextY) <= ballStopBorder || currentBall.x == 75){
-                lastRemainder.y = 0;
-                nextY = 0;
+            if (nextX - 75 < 0) {
                 currentBall.x = 75;
+                speedStart.x = -speedStart.x * izracunatoOdbijanje;
                 canChangeX = false;
-            } else{
-                (new AsyncTask<Void, Void, Void>(){
-
-                    @Override
-                    protected Void doInBackground(Void... voids) {
-                        MediaPlayer hitWallSound = MediaPlayer.create((Context)displayView, R.raw.hit_wall);
-                        hitWallSound.start();
-                        return null;
-                    }
-                }).execute();
+                rotating = false;
             }
-        }
-        if((nextY + currentBall.x + 75) >= imageViewCord.x){
-            nextY = (float)izracunatoOdbijanje*nextY*(-1);
-            lastRemainder.y = nextY;
-            if(Math.abs(nextY) <= ballStopBorder || currentBall.x == imageViewCord.x - 75){
-                lastRemainder.y = 0;
-                nextY = 0;
+            if (nextX + 75 >= imageViewCord.x) {
                 currentBall.x = imageViewCord.x - 75;
+                speedStart.x = -speedStart.x * izracunatoOdbijanje;
                 canChangeX = false;
-            } else{
-                (new AsyncTask<Void, Void, Void>(){
-
-                    @Override
-                    protected Void doInBackground(Void... voids) {
-                        MediaPlayer hitWallSound = MediaPlayer.create((Context)displayView, R.raw.hit_wall);
-                        hitWallSound.start();
-                        return null;
-                    }
-                }).execute();
+                rotating = false;
             }
-        }
+            if (nextY - 75 < 0) {
+                currentBall.y = 75;
+                speedStart.y = -speedStart.y * izracunatoOdbijanje;
+                canChangeY = false;
+                rotating = false;
+            }
+            if (nextY + 75 >= imageViewCord.y) {
+                currentBall.y = imageViewCord.y - 75;
+                speedStart.y = -speedStart.y * izracunatoOdbijanje;
+                canChangeY = false;
+                rotating = false;
+            }
 
-        if(!canChangeX && !canChangeY){ displayView.updateView(); return; }
+            if(!canChangeX && !canChangeY){ displayView.updateView(); return; }
+            boolean foundAngle = false;
+            for(int i = 0; i < startWall.size(); i++){
 
-        for(int i = 0; i < startWall.size(); i++){
+                float left = startWall.get(i).x > endWall.get(i).x ? endWall.get(i).x : startWall.get(i).x;
+                float top = startWall.get(i).y > endWall.get(i).y ? endWall.get(i).y : startWall.get(i).y;
+                float right = startWall.get(i).x > endWall.get(i).x ? startWall.get(i).x : endWall.get(i).x;
+                float bottom = startWall.get(i).y > endWall.get(i).y ? startWall.get(i).y : endWall.get(i).y;
 
-            float left = startWall.get(i).x > endWall.get(i).x ? endWall.get(i).x : startWall.get(i).x;
-            float top = startWall.get(i).y > endWall.get(i).y ? endWall.get(i).y : startWall.get(i).y;
-            float right = startWall.get(i).x > endWall.get(i).x ? startWall.get(i).x : endWall.get(i).x;
-            float bottom = startWall.get(i).y > endWall.get(i).y ? startWall.get(i).y : endWall.get(i).y;
+                boolean onWall = isOnWall(left,top,right, bottom);
+                rotating = rotating || onWall;
 
-            if(canChangeY && ((nextY + currentBall.x) < right) && ((nextY + currentBall.x) > left)){
-                if(((nextX + currentBall.y) >= (top - 75)) && ((nextX + currentBall.y) <= (75 + bottom))){
+                if(canChangeY && nextX <= right && nextX >= left && nextY >= (top - 75) && nextY <= (75 + bottom)){
 
-                    nextX = (float)izracunatoOdbijanje*nextX*(-1);
-                    lastRemainder.x = nextX;
-                    if((Math.abs(nextX) <= ballStopBorder && currentBall.y <= ((top + ((bottom - top)/2)) - 75)) || currentBall.y == top - 75){
-                        lastRemainder.x = 0;
-                        nextX = 0;
+                    speedStart.y = -speedStart.y * izracunatoOdbijanje;
+                    if(currentBall.y <= top) {
                         currentBall.y = top - 75;
                         canChangeY = false;
+                        rotating = false;
                     }
-
-                    if((Math.abs(nextX) <= ballStopBorder && currentBall.y >= ((top + ((bottom - top)/2)) + 75)) || currentBall.y == bottom + 75){
-                        lastRemainder.x = 0;
-                        nextX = 0;
+                    if(currentBall.y >= bottom) {
                         currentBall.y = bottom + 75;
                         canChangeY = false;
-                    }
-
-                    if(canChangeY){
-                        (new AsyncTask<Void, Void, Void>(){
-
-                            @Override
-                            protected Void doInBackground(Void... voids) {
-                                MediaPlayer hitWallSound = MediaPlayer.create((Context)displayView, R.raw.hit_wall);
-                                hitWallSound.start();
-                                return null;
-                            }
-                        }).execute();
+                        rotating = false;
                     }
                 }
-            }
 
-            float helpY = canChangeY ? nextX + currentBall.y : currentBall.y;
+                float helpY = canChangeY ? nextY : currentBall.y;
 
-            if(canChangeX && (helpY < bottom) && (helpY > top)){
-                if(((nextY + currentBall.x) >= (left - 75)) && ((nextY + currentBall.x) <= (75 + right))){
+                if(canChangeX && helpY <= bottom && helpY >= top && nextX >= (left - 75) && nextX <= (75 + right)){
 
-                    nextY = (float)izracunatoOdbijanje*nextY*(-1);
-                    lastRemainder.y = nextY;
-                    if((Math.abs(nextY) <= ballStopBorder && currentBall.x <= ((left + ((right - left)/2)) - 75)) || currentBall.x == left - 75){
-                        lastRemainder.y = 0;
-                        nextY = 0;
+                    speedStart.x = -speedStart.x * izracunatoOdbijanje;
+                    if(currentBall.x <= left) {
                         currentBall.x = left - 75;
                         canChangeX = false;
+                        rotating = false;
                     }
-
-                    if((Math.abs(nextY) <= ballStopBorder && currentBall.x >= ((left + ((right - left)/2)) + 75)) || currentBall.x == right + 75){
-                        lastRemainder.y = 0;
-                        nextY = 0;
+                    if(currentBall.x >= right) {
                         currentBall.x = right + 75;
                         canChangeX = false;
+                        rotating = false;
                     }
+                }
 
-                    if(canChangeX){
-                        (new AsyncTask<Void, Void, Void>(){
+                if((canChangeX || canChangeY) && !foundAngle){
 
-                            @Override
-                            protected Void doInBackground(Void... voids) {
-                                MediaPlayer hitWallSound = MediaPlayer.create((Context)displayView, R.raw.hit_wall);
-                                hitWallSound.start();
-                                return null;
+                    float helpEdgeX = canChangeX ? nextX : currentBall.x;
+                    float helpEdgeY = canChangeY ? nextY : currentBall.y;
+
+                    ParameterCord topLeft = new ParameterCord(left, top);
+                    ParameterCord topRight = new ParameterCord(right, top);
+                    ParameterCord bottomRight = new ParameterCord(right, bottom);
+                    ParameterCord bottomLeft = new ParameterCord(left, bottom);
+
+                    float distance = (float) Math.sqrt(Math.pow((helpEdgeX - topLeft.x), 2) + Math.pow((helpEdgeY - topLeft.y), 2));
+
+                    if (distance <= 75 && helpEdgeX < left && helpEdgeY < top) {
+                        foundAngle = true;
+                        boolean changeSpeed = false;
+                        for(int j = 0; j < startWall.size(); j++)
+                            if(i != j){
+                                float leftTemp = startWall.get(j).x > endWall.get(j).x ? endWall.get(j).x : startWall.get(j).x;
+                                float topTemp = startWall.get(j).y > endWall.get(j).y ? endWall.get(j).y : startWall.get(j).y;
+                                float rightTemp = startWall.get(j).x > endWall.get(j).x ? startWall.get(j).x : endWall.get(j).x;
+                                float bottomTemp = startWall.get(j).y > endWall.get(j).y ? startWall.get(j).y : endWall.get(j).y;
+
+                                if(canChangeY && helpEdgeX <= (rightTemp+150) && helpEdgeX >= (leftTemp-150) && helpEdgeY >= (topTemp - 75) && helpEdgeY <= (75 + bottomTemp)){
+
+                                    speedStart.y = -speedStart.y * izracunatoOdbijanje;
+                                    changeSpeed = true;
+                                    if(currentBall.y <= topTemp) {
+                                        helpEdgeY = currentBall.y = topTemp - 75;
+                                        canChangeY = false;
+                                    }
+                                    if(currentBall.y >= bottomTemp) {
+                                        helpEdgeY = currentBall.y = bottomTemp + 75;
+                                        canChangeY = false;
+                                    }
+                                }
+
+                                float helpYTemp = canChangeY ? helpEdgeY : currentBall.y;
+
+                                if(canChangeX && helpYTemp <= (bottomTemp+150) && helpYTemp >= (topTemp-150) && helpEdgeX >= (leftTemp - 75) && helpEdgeX <= (75 + rightTemp)){
+
+                                    speedStart.x = -speedStart.x * izracunatoOdbijanje;
+                                    changeSpeed = true;
+                                    if(currentBall.x <= leftTemp - 73.5) {
+                                        helpEdgeX = currentBall.x = leftTemp - 75;
+                                        canChangeX = false;
+                                    }
+                                    if(currentBall.x >= rightTemp + 73.5) {
+                                        helpEdgeX = currentBall.x = rightTemp + 75;
+                                        canChangeX = false;
+                                    }
+                                }
                             }
-                        }).execute();
+
+                        if(canChangeX || canChangeY){
+
+                            float duzinaX = topLeft.x - helpEdgeX;
+                            if(canChangeX && canChangeY) duzinaX = ((topLeft.x - helpEdgeX) * 75f) / distance;
+                            else if(!canChangeY) duzinaX = (float)Math.sqrt(Math.pow(75, 2) - Math.pow(topLeft.y - helpEdgeY,2));
+                            float noviX = topLeft.x - duzinaX;
+
+                            float duzinaY = topLeft.y - helpEdgeY;
+                            if(canChangeX && canChangeY) duzinaY = ((topLeft.y - helpEdgeY) * 75f) / distance;
+                            else if(!canChangeX) duzinaY = (float)Math.sqrt(Math.pow(75, 2) - Math.pow(duzinaX,2));
+                            float noviY = topLeft.y - duzinaY;
+
+                            double angle1 = Math.atan2(noviY - topLeft.y, noviX - topLeft.x);
+                            double angle2 = Math.atan2(topLeft.y - topLeft.y, noviX - topLeft.x);
+                            double result = Math.toDegrees(angle2-angle1);
+                            result = 360 - result;
+
+                            boolean canChangeSpeedX = false;
+                            boolean canChangeSpeedY = false;
+
+                            if(result < 55 || !canChangeY) canChangeSpeedX = true;
+                            if(result > 35 || !canChangeX) canChangeSpeedY = true;
+
+                            if(canChangeX){
+                                canChangeX = false;
+                                currentBall.x = noviX;
+                                if((!rotating || changeSpeed) && !onWall && canChangeSpeedX) speedStart.x = -speedStart.x * izracunatoOdbijanje;
+                            }
+                            if(canChangeY){
+                                canChangeY = false;
+                                currentBall.y = noviY;
+                                if((!rotating || changeSpeed) && !onWall && canChangeSpeedY) speedStart.y = -speedStart.y * izracunatoOdbijanje;
+                            }
+
+                            if(!rotating && lastRotatingTime > 0){
+                                long calcTime = lastRotatingTime - time;
+                                if(calcTime * NS2S < 0.25) {
+                                    rotating = true;
+                                    lastRotatingTime = -1;
+                                }
+                            }
+                            if(!rotating){
+                                boolean canChangeTime = false;
+                                if(lastRotatingTime > 0){
+                                    long calcTime = time - lastRotatingTime;
+                                    if(calcTime * NS2S > 0.25) canChangeTime = true;
+                                }
+                                if(lastRotatingTime < 0 || canChangeTime)
+                                    lastRotatingTime = time;
+                            }
+                        }
+                        if(!canChangeX && !canChangeY){ displayView.updateView(); return; }
+                        continue;
+                    }
+
+                    distance = (float) Math.sqrt(Math.pow((helpEdgeX - topRight.x), 2) + Math.pow((helpEdgeY - topRight.y), 2));
+
+                    if (distance <= 75 && helpEdgeX > right && helpEdgeY < top) {
+                        foundAngle = true;
+                        boolean changeSpeed = false;
+                        for(int j = 0; j < startWall.size(); j++)
+                            if(i != j){
+                                float leftTemp = startWall.get(j).x > endWall.get(j).x ? endWall.get(j).x : startWall.get(j).x;
+                                float topTemp = startWall.get(j).y > endWall.get(j).y ? endWall.get(j).y : startWall.get(j).y;
+                                float rightTemp = startWall.get(j).x > endWall.get(j).x ? startWall.get(j).x : endWall.get(j).x;
+                                float bottomTemp = startWall.get(j).y > endWall.get(j).y ? startWall.get(j).y : endWall.get(j).y;
+
+                                if(canChangeY && helpEdgeX <= rightTemp && helpEdgeX >= leftTemp && helpEdgeY >= (topTemp - 75) && helpEdgeY <= (75 + bottomTemp)){
+
+                                    speedStart.y = -speedStart.y * izracunatoOdbijanje;
+                                    changeSpeed = true;
+                                    if(currentBall.y <= topTemp) {
+                                        helpEdgeY = currentBall.y = topTemp - 75;
+                                        canChangeY = false;
+                                    }
+                                    if(currentBall.y >= bottomTemp) {
+                                        helpEdgeY = currentBall.y = bottomTemp + 75;
+                                        canChangeY = false;
+                                    }
+                                }
+
+                                float helpYTemp = canChangeY ? helpEdgeY : currentBall.y;
+
+                                if(canChangeX && helpYTemp <= bottomTemp && helpYTemp >= topTemp && helpEdgeX >= (leftTemp - 73.5) && helpEdgeX <= (73.5 + rightTemp)){
+
+                                    speedStart.x = -speedStart.x * izracunatoOdbijanje;
+                                    changeSpeed = true;
+                                    if(currentBall.x <= leftTemp - 73.5) {
+                                        helpEdgeX = currentBall.x = leftTemp - 75;
+                                        canChangeX = false;
+                                    }
+                                    if(currentBall.x >= rightTemp + 73.5) {
+                                        helpEdgeX = currentBall.x = rightTemp + 75;
+                                        canChangeX = false;
+                                    }
+                                }
+                            }
+
+                        if(canChangeX || canChangeY){
+
+                            float duzinaX = helpEdgeX - topRight.x;
+                            if(canChangeX && canChangeY) duzinaX = ((helpEdgeX - topRight.x) * 75f) / distance;
+                            else if(!canChangeY) duzinaX = (float)Math.sqrt(Math.pow(75, 2) - Math.pow(topRight.y - helpEdgeY,2));
+                            float noviX = topRight.x + duzinaX;
+
+                            float duzinaY = topRight.y - helpEdgeY;
+                            if(canChangeX && canChangeY) duzinaY = ((topRight.y - helpEdgeY) * 75f) / distance;
+                            else if(!canChangeX) duzinaY = (float)Math.sqrt(Math.pow(75, 2) - Math.pow(duzinaX,2));
+                            float noviY = topRight.y - duzinaY;
+
+                            double angle1 = Math.atan2(topRight.y - noviY, topRight.x - noviX);
+                            double angle2 = Math.atan2(topRight.y - topRight.y, topRight.x - noviX);
+                            double result = Math.toDegrees(angle2-angle1);
+
+                            boolean canChangeSpeedX = false;
+                            boolean canChangeSpeedY = false;
+
+                            if(result < 55 || !canChangeY) canChangeSpeedX = true;
+                            if(result > 35 || !canChangeX) canChangeSpeedY = true;
+
+                            if(canChangeX){
+                                canChangeX = false;
+                                currentBall.x = noviX;
+                                if((!rotating || changeSpeed) && !onWall && canChangeSpeedX) speedStart.x = -speedStart.x * izracunatoOdbijanje;
+                            }
+                            if(canChangeY){
+                                canChangeY = false;
+                                currentBall.y = noviY;
+                                if((!rotating || changeSpeed) && !onWall && canChangeSpeedY) speedStart.y = -speedStart.y * izracunatoOdbijanje;
+                            }
+
+                            if(!rotating && lastRotatingTime > 0){
+                                long calcTime = lastRotatingTime - time;
+                                if(calcTime * NS2S < 0.25) {
+                                    rotating = true;
+                                    lastRotatingTime = -1;
+                                }
+                            }
+                            if(!rotating){
+                                boolean canChangeTime = false;
+                                if(lastRotatingTime > 0){
+                                    long calcTime = time - lastRotatingTime;
+                                    if(calcTime * NS2S > 0.25) canChangeTime = true;
+                                }
+                                if(lastRotatingTime < 0 || canChangeTime)
+                                    lastRotatingTime = time;
+                            }
+                        }
+                        if(!canChangeX && !canChangeY){ displayView.updateView(); return; }
+                        continue;
+                    }
+
+                    distance = (float) Math.sqrt(Math.pow((helpEdgeX - bottomRight.x), 2) + Math.pow((helpEdgeY - bottomRight.y), 2));
+
+                    if (distance <= 75 && helpEdgeX > right && helpEdgeY > bottom) {
+                        foundAngle = true;
+                        boolean changeSpeed = false;
+                        for(int j = 0; j < startWall.size(); j++)
+                            if(i != j){
+                                float leftTemp = startWall.get(j).x > endWall.get(j).x ? endWall.get(j).x : startWall.get(j).x;
+                                float topTemp = startWall.get(j).y > endWall.get(j).y ? endWall.get(j).y : startWall.get(j).y;
+                                float rightTemp = startWall.get(j).x > endWall.get(j).x ? startWall.get(j).x : endWall.get(j).x;
+                                float bottomTemp = startWall.get(j).y > endWall.get(j).y ? startWall.get(j).y : endWall.get(j).y;
+
+                                if(canChangeY && helpEdgeX <= rightTemp && helpEdgeX >= leftTemp && helpEdgeY >= (topTemp - 75) && helpEdgeY <= (75 + bottomTemp)){
+
+                                    speedStart.y = -speedStart.y * izracunatoOdbijanje;
+                                    changeSpeed = true;
+                                    if(currentBall.y <= topTemp) {
+                                        helpEdgeY = currentBall.y = topTemp - 75;
+                                        canChangeY = false;
+                                    }
+                                    if(currentBall.y >= bottomTemp) {
+                                        helpEdgeY = currentBall.y = bottomTemp + 75;
+                                        canChangeY = false;
+                                    }
+                                }
+
+                                float helpYTemp = canChangeY ? helpEdgeY : currentBall.y;
+
+                                if(canChangeX && helpYTemp <= bottomTemp && helpYTemp >= topTemp && helpEdgeX >= (leftTemp - 73.5) && helpEdgeX <= (73.5 + rightTemp)){
+
+                                    speedStart.x = -speedStart.x * izracunatoOdbijanje;
+                                    changeSpeed = true;
+                                    if(currentBall.x <= leftTemp - 73.5) {
+                                        helpEdgeX = currentBall.x = leftTemp - 75;
+                                        canChangeX = false;
+                                    }
+                                    if(currentBall.x >= rightTemp + 73.5) {
+                                        helpEdgeX = currentBall.x = rightTemp + 75;
+                                        canChangeX = false;
+                                    }
+                                }
+                            }
+
+                        if(canChangeX || canChangeY){
+
+                            float duzinaX = helpEdgeX - bottomRight.x;
+                            if(canChangeX && canChangeY) duzinaX = ((helpEdgeX - bottomRight.x) * 75f) / distance;
+                            else if(!canChangeY) duzinaX = (float)Math.sqrt(Math.pow(75, 2) - Math.pow(helpEdgeY - bottomRight.y,2));
+                            float noviX = bottomRight.x + duzinaX;
+
+                            float duzinaY = helpEdgeY - bottomLeft.y;
+                            if(canChangeX && canChangeY) duzinaY = ((helpEdgeY - bottomRight.y) * 75f) / distance;
+                            else if(!canChangeX) duzinaY = (float)Math.sqrt(Math.pow(75, 2) - Math.pow(duzinaX,2));
+                            float noviY = bottomRight.y + duzinaY;
+
+                            double angle1 = Math.atan2(bottomRight.y - noviY, bottomRight.x - noviX);
+                            double angle2 = Math.atan2(bottomRight.y - bottomRight.y, bottomRight.x - noviX);
+                            double result = Math.toDegrees(angle2-angle1);
+                            result = 360 - result;
+
+                            boolean canChangeSpeedX = false;
+                            boolean canChangeSpeedY = false;
+
+                            if(result < 55 || !canChangeY) canChangeSpeedX = true;
+                            if(result > 35 || !canChangeX) canChangeSpeedY = true;
+
+                            if(canChangeX){
+                                canChangeX = false;
+                                currentBall.x = noviX;
+                                if((!rotating || changeSpeed) && !onWall && canChangeSpeedX) speedStart.x = -speedStart.x * izracunatoOdbijanje;
+                            }
+                            if(canChangeY){
+                                canChangeY = false;
+                                currentBall.y = noviY;
+                                if((!rotating || changeSpeed) && !onWall && canChangeSpeedY) speedStart.y = -speedStart.y * izracunatoOdbijanje;
+                            }
+
+                            if(!rotating && lastRotatingTime > 0){
+                                long calcTime = lastRotatingTime - time;
+                                if(calcTime * NS2S < 0.25) {
+                                    rotating = true;
+                                    lastRotatingTime = -1;
+                                }
+                            }
+                            if(!rotating){
+                                boolean canChangeTime = false;
+                                if(lastRotatingTime > 0){
+                                    long calcTime = time - lastRotatingTime;
+                                    if(calcTime * NS2S > 0.25) canChangeTime = true;
+                                }
+                                if(lastRotatingTime < 0 || canChangeTime)
+                                    lastRotatingTime = time;
+                            }
+                        }
+                        if(!canChangeX && !canChangeY){ displayView.updateView(); return; }
+                        continue;
+                    }
+
+                    distance = (float) Math.sqrt(Math.pow((helpEdgeX - bottomLeft.x), 2) + Math.pow((helpEdgeY - bottomLeft.y), 2));
+
+                    if (distance <= 75 && helpEdgeX < left && helpEdgeY > bottom) {
+                        foundAngle = true;
+                        boolean changeSpeed = false;
+                        for(int j = 0; j < startWall.size(); j++)
+                            if(i != j){
+                                float leftTemp = startWall.get(j).x > endWall.get(j).x ? endWall.get(j).x : startWall.get(j).x;
+                                float topTemp = startWall.get(j).y > endWall.get(j).y ? endWall.get(j).y : startWall.get(j).y;
+                                float rightTemp = startWall.get(j).x > endWall.get(j).x ? startWall.get(j).x : endWall.get(j).x;
+                                float bottomTemp = startWall.get(j).y > endWall.get(j).y ? startWall.get(j).y : endWall.get(j).y;
+
+                                if(canChangeY && helpEdgeX <= rightTemp && helpEdgeX >= leftTemp && helpEdgeY >= (topTemp - 75) && helpEdgeY <= (75 + bottomTemp)){
+
+                                    speedStart.y = -speedStart.y * izracunatoOdbijanje;
+                                    changeSpeed = true;
+                                    if(currentBall.y <= topTemp) {
+                                        helpEdgeY = currentBall.y = topTemp - 75;
+                                        canChangeY = false;
+                                    }
+                                    if(currentBall.y >= bottomTemp) {
+                                        helpEdgeY = currentBall.y = bottomTemp + 75;
+                                        canChangeY = false;
+                                    }
+                                }
+
+                                float helpYTemp = canChangeY ? helpEdgeY : currentBall.y;
+
+                                if(canChangeX && helpYTemp <= bottomTemp && helpYTemp >= topTemp && helpEdgeX >= (leftTemp - 73.5) && helpEdgeX <= (73.5 + rightTemp)){
+
+                                    speedStart.x = -speedStart.x * izracunatoOdbijanje;
+                                    changeSpeed = true;
+                                    if(currentBall.x <= leftTemp - 73.5) {
+                                        helpEdgeX = currentBall.x = leftTemp - 75;
+                                        canChangeX = false;
+                                    }
+                                    if(currentBall.x >= rightTemp + 73.5) {
+                                        helpEdgeX = currentBall.x = rightTemp + 75;
+                                        canChangeX = false;
+                                    }
+                                }
+                            }
+
+                        if(canChangeX || canChangeY){
+
+                            float duzinaX = bottomLeft.x - helpEdgeX;
+                            if(canChangeX && canChangeY) duzinaX = ((bottomLeft.x - helpEdgeX) * 75f) / distance;
+                            else if(!canChangeY) duzinaX = (float)Math.sqrt(Math.pow(75, 2) - Math.pow(helpEdgeY - bottomLeft.y,2));
+                            float noviX = bottomLeft.x - duzinaX;
+
+                            float duzinaY = helpEdgeY - bottomLeft.y;
+                            if(canChangeX && canChangeY) duzinaY = ((helpEdgeY - bottomRight.y) * 75f) / distance;
+                            else if(!canChangeX) duzinaY = (float)Math.sqrt(Math.pow(75, 2) - Math.pow(duzinaX,2));
+                            float noviY = bottomLeft.y + duzinaY;
+
+                            double angle1 = Math.atan2(noviY - bottomLeft.y, noviX - bottomLeft.x);
+                            double angle2 = Math.atan2(bottomLeft.y - bottomLeft.y, noviX - bottomLeft.x);
+                            double result = Math.toDegrees(angle2-angle1);
+
+                            boolean canChangeSpeedX = false;
+                            boolean canChangeSpeedY = false;
+
+                            if(result < 55 || !canChangeY) canChangeSpeedX = true;
+                            if(result > 35 || !canChangeX) canChangeSpeedY = true;
+
+                            if(canChangeX){
+                                canChangeX = false;
+                                currentBall.x = noviX;
+                                if((!rotating || changeSpeed) && !onWall && canChangeSpeedX) speedStart.x = -speedStart.x * izracunatoOdbijanje;
+                            }
+                            if(canChangeY){
+                                canChangeY = false;
+                                currentBall.y = noviY;
+                                if((!rotating || changeSpeed) && !onWall && canChangeSpeedY) speedStart.y = -speedStart.y * izracunatoOdbijanje;
+                            }
+                            if(!rotating && lastRotatingTime > 0){
+                                long calcTime = lastRotatingTime - time;
+                                if(calcTime * NS2S < 0.25) {
+                                    rotating = true;
+                                    lastRotatingTime = -1;
+                                }
+                            }
+                            if(!rotating){
+                                boolean canChangeTime = false;
+                                if(lastRotatingTime > 0){
+                                    long calcTime = time - lastRotatingTime;
+                                    if(calcTime * NS2S > 0.25) canChangeTime = true;
+                                }
+                                if(lastRotatingTime < 0 || canChangeTime)
+                                lastRotatingTime = time;
+                            }
+                        }
+                        if(!canChangeX && !canChangeY){ displayView.updateView(); return; }
+                        continue;
                     }
                 }
+                if(!canChangeX && !canChangeY){ displayView.updateView(); return; }
             }
+
+            if(!canChangeX && !canChangeY){ displayView.updateView(); return; }
+            rotating = false;
+
+            if(canChangeY){ currentBall.y = nextY; } //+ (otporX*otpor)); }
+            if(canChangeX){ currentBall.x = nextX; } //+ (otporY*otpor)); }
+
+        } else{
+            lastTime = time;
+            this.canMoveBall = true;
         }
-
-        if(!canChangeX && !canChangeY){ displayView.updateView(); return; }
-
-        boolean foundAngle = false;
-
-        for(int i = 0; i < startWall.size(); i++) {
-
-            boolean angleChecked = false;
-
-            float left = startWall.get(i).x > endWall.get(i).x ? endWall.get(i).x : startWall.get(i).x;
-            float top = startWall.get(i).y > endWall.get(i).y ? endWall.get(i).y : startWall.get(i).y;
-            float right = startWall.get(i).x > endWall.get(i).x ? startWall.get(i).x : endWall.get(i).x;
-            float bottom = startWall.get(i).y > endWall.get(i).y ? startWall.get(i).y : endWall.get(i).y;
-
-            ParameterCord topLeft = new ParameterCord(left, top);
-            ParameterCord topRight = new ParameterCord(right, top);
-            ParameterCord bottomRight = new ParameterCord(right, bottom);
-            ParameterCord bottomLeft = new ParameterCord(left, bottom);
-
-            if (!angleChecked) {
-
-                float distance = (float) Math.sqrt(Math.pow((testX - topLeft.x), 2) + Math.pow((testY - topLeft.y), 2));
-
-                if (distance <= 75 && testX <= left && testY <= top) {
-
-                    if(foundAngle){
-                        canChangeX = false;
-                        canChangeY = false;
-                        break;
-                    }
-
-                    if(!canChangeX) canChangeY = false;
-                    if(!canChangeY) canChangeX = false;
-
-                    if((canChangeX || canChangeY) && !foundAngle){
-
-                        float duzinaX = ((topLeft.x - testX) * ((float) 75.1)) / distance;
-                        float noviX = topLeft.x - duzinaX;
-
-                        float duzinaY = ((topLeft.y - testY) * ((float) 75.1)) / distance;
-                        float noviY = topLeft.y - duzinaY;
-
-                        if(canChangeX){ currentBall.x = noviX; canChangeX = false; }
-                        if(canChangeY){ currentBall.y = noviY; canChangeY = false; }
-                    }
-
-                    angleChecked = true;
-                    foundAngle = true;
-                }
-            }
-
-            if (!angleChecked) {
-
-                float distance = (float) Math.sqrt(Math.pow((testX - topRight.x), 2) + Math.pow((testY - topRight.y), 2));
-
-                if (distance <= 75 && testX >= right && testY <= top) {
-
-                    if(foundAngle){
-                        canChangeX = false;
-                        canChangeY = false;
-                        break;
-                    }
-
-                    if(!canChangeX) canChangeY = false;
-                    if(!canChangeY) canChangeX = false;
-
-                    if((canChangeX || canChangeY) && !foundAngle){
-
-                        float duzinaX = ((testX - topRight.x) * ((float) 75.1)) / distance;
-                        float noviX = topRight.x + duzinaX;
-
-                        float duzinaY = ((topRight.y - testY) * ((float) 75.1)) / distance;
-                        float noviY = topRight.y - duzinaY;
-
-                        if(canChangeX){ currentBall.x = noviX; canChangeX = false; }
-                        if(canChangeY){ currentBall.y = noviY; canChangeY = false; }
-                    }
-
-                    angleChecked = true;
-                    foundAngle = true;
-                }
-            }
-
-            if (!angleChecked) {
-
-                float distance = (float) Math.sqrt(Math.pow((testX - bottomRight.x), 2) + Math.pow((testY - bottomRight.y), 2));
-
-                if (distance <= 75 && testX >= right && testY >= bottom) {
-
-                    if(foundAngle){
-                        canChangeX = false;
-                        canChangeY = false;
-                        break;
-                    }
-
-                    if(!canChangeX) canChangeY = false;
-                    if(!canChangeY) canChangeX = false;
-
-                    if((canChangeX || canChangeY) && !foundAngle){
-
-                        float duzinaX = ((testX - bottomRight.x) * ((float) 75.1)) / distance;
-                        float noviX = bottomRight.x + duzinaX;
-
-                        float duzinaY = ((testY - bottomRight.y) * ((float) 75.1)) / distance;
-                        float noviY = bottomRight.y + duzinaY;
-
-                        if(canChangeX){ currentBall.x = noviX; canChangeX = false; }
-                        if(canChangeY){ currentBall.y = noviY; canChangeY = false; }
-                    }
-
-                    angleChecked = true;
-                    foundAngle = true;
-                }
-            }
-
-            if (!angleChecked) {
-
-                float distance = (float) Math.sqrt(Math.pow((testX - bottomLeft.x), 2) + Math.pow((testY - bottomLeft.y), 2));
-
-                if (distance <= 75 && testX <= left && testY >= bottom) {
-
-                    if(foundAngle){
-                        canChangeX = false;
-                        canChangeY = false;
-                        break;
-                    }
-
-                    if(!canChangeX) canChangeY = false;
-                    if(!canChangeY) canChangeX = false;
-
-                    if((canChangeX || canChangeY) && !foundAngle){
-
-                        float duzinaX = ((bottomLeft.x - testX) * ((float) 75.1)) / distance;
-                        float noviX = bottomLeft.x - duzinaX;
-
-                        float duzinaY = ((testY - bottomRight.y) * ((float) 75.1)) / distance;
-                        float noviY = bottomRight.y + duzinaY;
-
-                        if(canChangeX){ currentBall.x = noviX; canChangeX = false; }
-                        if(canChangeY){ currentBall.y = noviY; canChangeY = false; }
-                    }
-
-                    angleChecked = true;
-                    foundAngle = true;
-                }
-            }
-        }
-        if(!canChangeX && !canChangeY){ displayView.updateView(); return; }
-
-        float otporX, otporY;
-        if(nextX == 0) otporX = 0;
-        else otporX = nextX > 0 ? ((float)-0.1) : ((float)0.1);
-
-        if(nextY == 0) otporY = 0;
-        else otporY = nextY > 0 ? ((float)-0.1) : ((float)0.1);
-
-        if(canChangeY){ currentBall.y += (nextX);} //+ (otporX*otpor)); }
-        if(canChangeX){ currentBall.x += (nextY);} //+ (otporY*otpor)); }
-
         displayView.updateView();
     }
 
@@ -649,6 +857,14 @@ public class GameController implements Serializable {
         }).execute(mapName, username);
 
         return sqlInsertResult;
+    }
+
+    public float getSpeedX(){
+        return speedStart.x;
+    }
+
+    public float getSpeedY(){
+        return speedStart.y;
     }
 
 }

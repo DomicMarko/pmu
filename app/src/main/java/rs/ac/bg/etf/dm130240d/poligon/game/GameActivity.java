@@ -25,12 +25,12 @@ public class GameActivity extends AppCompatActivity implements ViewInterface, Se
     private static final String KEY_GAME_CONTROLLER = "rs.ac.bg.etf.dm130240d.poligon.game.GameController";
 
     private GameView gameView;
-    private TextView clockView;
+    private TextView clockView, paramView, paramView2;
 
     protected TimerModel model;
     private GameController controller;
     private String mapPath, mapName;
-    private boolean paramsCalculated, canSetDefaultSensorPar, canUpdateBall;
+    private boolean paramsCalculated, canSetDefaultSensorPar, canUpdateBall, sensorLock = false;
 
     private Sensor mySensor;
     private SensorManager SM;
@@ -50,6 +50,10 @@ public class GameActivity extends AppCompatActivity implements ViewInterface, Se
 
         model = new TimerModel();
 
+        clockView = (TextView) findViewById(R.id.gameClockView);
+        paramView = (TextView) findViewById(R.id.paramsView);
+        paramView2 = (TextView) findViewById(R.id.paramsView2);
+
         if (savedInstanceState == null) {
 
             Bundle extras = getIntent().getExtras();
@@ -63,17 +67,17 @@ public class GameActivity extends AppCompatActivity implements ViewInterface, Se
 
             DbModel dbModel = new DbModel(this);
             controller.setDbModel(dbModel);
+            clockView.setText("00:00:00");
         } else {
             controller = (GameController) savedInstanceState.getSerializable(KEY_GAME_CONTROLLER);
             controller.setDisplayView(this);
-            controller.start_timer();
 
             DbModel dbModel = new DbModel(this);
             controller.setDbModel(dbModel);
 
             mapPath = (String) savedInstanceState.getSerializable("MAP_PLAN");
         }
-
+        controller.start_timer();
         gameView = (GameView) findViewById(R.id.gameImageView);
         gameView.setController(controller);
 
@@ -88,10 +92,22 @@ public class GameActivity extends AppCompatActivity implements ViewInterface, Se
             finish();
         }
 
-        clockView = (TextView) findViewById(R.id.gameClockView);
-        clockView.setText("00:00:00");
+        sensorLock = true;
 
         this.updateView();
+    }
+
+    @Override
+    protected void onDestroy() {
+        controller = null;
+        super.onDestroy();
+    }
+
+    @Override
+    public void onBackPressed() {
+        sensorLock = false;
+        finish();
+        super.onBackPressed();
     }
 
     @Override
@@ -116,19 +132,23 @@ public class GameActivity extends AppCompatActivity implements ViewInterface, Se
     @Override
     public void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
-
+        sensorLock = false;
+        controller.pause_timer();
         outState.putSerializable(KEY_GAME_CONTROLLER, controller);
     }
 
     @Override
     protected void onPause() {
+        controller.pause_timer();
         super.onPause();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-
+        controller.setDisplayView(this);
+        sensorLock = true;
+        controller.start_timer();
         this.updateView();
     }
 
@@ -142,24 +162,31 @@ public class GameActivity extends AppCompatActivity implements ViewInterface, Se
                 gameView.invalidate();
                 String time = model.getTime();
                 clockView.setText(time);
-                if(controller.isGameOver() && controller.isHasWon()){
-                    FragmentManager fm = getSupportFragmentManager();
-                    SaveResultFragment dialogFragment = new SaveResultFragment().newInstance(controller.getEndTime());
-                    dialogFragment.show(fm, "Save result Fragment");
+                paramView.setText("X: " + controller.getSpeedX());
+                paramView2.setText(controller.getSpeedY() + " :Y");
+                if(sensorLock && controller != null) {
+                    if (controller.isGameOver() && controller.isHasWon()) {
+                        FragmentManager fm = getSupportFragmentManager();
+                        SaveResultFragment dialogFragment = new SaveResultFragment().newInstance(controller.getEndTime());
+                        dialogFragment.show(fm, "Save result Fragment");
+                    }
+                    if (controller.isGameOver() && !controller.isHasWon()) finish();
                 }
-                if(controller.isGameOver() && !controller.isHasWon()) finish();
             }
         });
     }
 
     @Override
     public void onSensorChanged(SensorEvent sensorEvent) {
-        if(canSetDefaultSensorPar){
-            controller.setDefaultSensorPar(sensorEvent.values[0], sensorEvent.values[1]);
-            canSetDefaultSensorPar = false;
-            canUpdateBall = true;
+        if(sensorLock){
+            float[] valuesClone = sensorEvent.values.clone();
+            if(canSetDefaultSensorPar){
+                controller.setDefaultSensorPar(sensorEvent.values[0], sensorEvent.values[1]);
+                canSetDefaultSensorPar = false;
+                canUpdateBall = true;
+            }
+            if(canUpdateBall && !controller.isGameOver()) controller.moveBall(valuesClone[0], valuesClone[1], sensorEvent.timestamp);
         }
-        if(canUpdateBall && !controller.isGameOver()) controller.moveBall(sensorEvent.values[0], sensorEvent.values[1]);
     }
 
     @Override
@@ -168,6 +195,7 @@ public class GameActivity extends AppCompatActivity implements ViewInterface, Se
     }
 
     public void doPositiveClick(String username) {
+        sensorLock = false;
         finish();
         boolean updatedSuccess = controller.saveResult(username);
         if(updatedSuccess) {
@@ -179,6 +207,7 @@ public class GameActivity extends AppCompatActivity implements ViewInterface, Se
     }
 
     public void doNegativeClick() {
+        sensorLock = false;
         // Do stuff here.
         finish();
     }

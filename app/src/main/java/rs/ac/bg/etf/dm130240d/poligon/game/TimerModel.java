@@ -79,7 +79,8 @@ public class TimerModel implements Serializable {
 	public synchronized boolean start(long newTime) {
 		if (state == State.PAUSED) {
 			state = State.RUNNING;
-			return calculateNewTime(newTime);
+			lastTime = newTime;
+			return false;//calculateNewTime(newTime);
 		} else {
 			state = State.RUNNING;
 			return resetTime(newTime);
@@ -93,11 +94,12 @@ public class TimerModel implements Serializable {
 			result = calculateNewTime(newTime);
 			return result;
 		}
+		/*
 		if (state == State.PAUSED) {
 			state = State.RUNNING;
 			result = calculateNewTime(newTime);
 		}
-		
+		*/
 		return result;
 	}
 
